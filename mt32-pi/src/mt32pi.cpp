@@ -36,7 +36,7 @@
 #define MT32_PI_NAME "mt32-pi"
 LOGMODULE(MT32_PI_NAME);
 //const char MT32PiFullName[] = MT32_PI_NAME " " MT32_PI_VERSION;
-const char MT32PiFullName[] = MT32_PI_NAME;
+const char MT32PiFullName[] = "Trobadour (mt32-pi)";
 
 const char WLANFirmwarePath[] = "SD:firmware/";
 const char WLANConfigFile[]   = "SD:wpa_supplicant.conf";
@@ -270,8 +270,8 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 		m_pControl = nullptr;
 	}
 
-	LCDLog(TLCDLogType::Startup, "Init mt32emu");
-	InitMT32Synth();
+	//LCDLog(TLCDLogType::Startup, "Init mt32emu");
+	//InitMT32Synth();
 
 	LCDLog(TLCDLogType::Startup, "Init FluidSynth");
 	InitSoundFontSynth();
