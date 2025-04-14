@@ -102,7 +102,8 @@ CMT32Pi::CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSyste
 
 	  m_bSerialMIDIAvailable(false),
 	  m_bSerialMIDIEnabled(false),
-	  m_pUSBMIDIDevice(nullptr),
+	  m_pUSBMIDIDevice1(nullptr),
+	  m_pUSBMIDIDevice2(nullptr),
 	  m_pUSBSerialDevice(nullptr),
 	  m_pUSBMassStorageDevice(nullptr),
 
@@ -163,13 +164,13 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 			CLogger::Get()->RegisterPanicHandler(PanicHandler);
 
 			// Splash screen
-			if (m_pLCD->GetType() == CLCD::TType::Graphical && !m_pConfig->SystemVerbose)
-				m_pLCD->DrawImage(TImage::MT32PiLogo, true);
-			else
-			{
+			//if (m_pLCD->GetType() == CLCD::TType::Graphical && !m_pConfig->SystemVerbose)
+			//	m_pLCD->DrawImage(TImage::MT32PiLogo, true);
+			//else
+			//{
 				const u8 nOffsetX = CUserInterface::CenterMessageOffset(*m_pLCD, MT32PiFullName);
 				m_pLCD->Print(MT32PiFullName, nOffsetX, 0, false, true);
-			}
+			//}
 		}
 		else
 		{
@@ -825,11 +826,18 @@ void CMT32Pi::UpdateUSB(bool bStartup)
 	}
 	m_pUSBMassStorageDevice = pUSBMassStorageDevice;
 
-	if (!m_pUSBMIDIDevice && (m_pUSBMIDIDevice = static_cast<CUSBMIDIDevice*>(CDeviceNameService::Get()->GetDevice("umidi1", FALSE))))
+	if (!m_pUSBMIDIDevice1 && (m_pUSBMIDIDevice1 = static_cast<CUSBMIDIDevice*>(CDeviceNameService::Get()->GetDevice("umidi1", FALSE))))
 	{
-		m_pUSBMIDIDevice->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBMIDIDevice);
-		m_pUSBMIDIDevice->RegisterPacketHandler(USBMIDIPacketHandler);
-		LOGNOTE("Using USB MIDI interface");
+		m_pUSBMIDIDevice1->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBMIDIDevice1);
+		m_pUSBMIDIDevice1->RegisterPacketHandler(USBMIDIPacketHandler1);
+		LOGNOTE("Using USB MIDI interface1");
+		m_bSerialMIDIEnabled = false;
+	}
+	else if (!m_pUSBMIDIDevice2 && (m_pUSBMIDIDevice2 = static_cast<CUSBMIDIDevice*>(CDeviceNameService::Get()->GetDevice("umidi2", FALSE))))
+	{
+		m_pUSBMIDIDevice2->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBMIDIDevice2);
+		m_pUSBMIDIDevice2->RegisterPacketHandler(USBMIDIPacketHandler2);
+		LOGNOTE("Using USB MIDI interface2");
 		m_bSerialMIDIEnabled = false;
 	}
 
@@ -1266,15 +1274,20 @@ void CMT32Pi::USBMIDIDeviceRemovedHandler(CDevice* pDevice, void* pContext)
 	*pDevicePointer = nullptr;
 
 	// Re-enable serial MIDI if not in-use by logger and no other MIDI devices available
-	if (s_pThis->m_bSerialMIDIAvailable && !(s_pThis->m_pUSBMIDIDevice || s_pThis->m_pUSBSerialDevice || s_pThis->m_pPisound))
+	if (s_pThis->m_bSerialMIDIAvailable && !(s_pThis->m_pUSBMIDIDevice1 || s_pThis->m_pUSBMIDIDevice2 || s_pThis->m_pUSBSerialDevice || s_pThis->m_pPisound))
 	{
 		LOGNOTE("Using serial MIDI interface");
 		s_pThis->m_bSerialMIDIEnabled = true;
 	}
 }
 
+// The following handlers are called from interrupt context, enqueuUSBMIDIPacketHandlere into ring buffer for main thread
+void CMT32Pi::USBMIDIPacketHandler1(unsigned nCable, u8* pPacket, unsigned nLength)
+{
+	IRQMIDIReceiveHandler(pPacket, nLength);
+}
 // The following handlers are called from interrupt context, enqueue into ring buffer for main thread
-void CMT32Pi::USBMIDIPacketHandler(unsigned nCable, u8* pPacket, unsigned nLength)
+void CMT32Pi::USBMIDIPacketHandler2(unsigned nCable, u8* pPacket, unsigned nLength)
 {
 	IRQMIDIReceiveHandler(pPacket, nLength);
 }

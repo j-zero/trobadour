@@ -20,6 +20,8 @@
 // mt32-pi. If not, see <http://www.gnu.org/licenses/>.
 //
 
+#define CHANNELS 16
+
 #include <fatfs/ff.h>
 #include <circle/logger.h>
 #include <circle/timer.h>
@@ -200,6 +202,9 @@ bool CSoundFontSynth::Initialize()
 	fluid_settings_setnum(m_pSettings, "synth.sample-rate", static_cast<double>(m_nSampleRate));
 	fluid_settings_setint(m_pSettings, "synth.threadsafe-api", false);
 
+	ReportStatus();
+
+
 	return Reinitialize(pSoundFontPath, &FXProfile);
 }
 
@@ -241,6 +246,9 @@ void CSoundFontSynth::HandleMIDIShortMessage(u32 nMessage)
 
 		// Control change
 		case 0xB0:
+			if(nData1 == 70)
+				fluid_synth_program_change(m_pSynth, nChannel, nData2); // AKAI MPK miniplay Hack
+
 			fluid_synth_cc(m_pSynth, nChannel, nData1, nData2);
 			break;
 
@@ -329,10 +337,11 @@ void CSoundFontSynth::ReportStatus() const
 
 void CSoundFontSynth::UpdateLCD(CLCD& LCD, unsigned int nTicks)
 {
-	const u8 nBarHeight = LCD.Height();
-	float ChannelLevels[16], PeakLevels[16];
+	//const u8 nBarHeight = LCD.Height();
+	const u8 nBarHeight = 16;
+	float ChannelLevels[CHANNELS], PeakLevels[CHANNELS];
 	m_MIDIMonitor.GetChannelLevels(nTicks, ChannelLevels, PeakLevels, m_nPercussionMask);
-	CUserInterface::DrawChannelLevels(LCD, nBarHeight, ChannelLevels, PeakLevels, 16, true);
+	CUserInterface::DrawChannelLevels(LCD, nBarHeight, ChannelLevels, PeakLevels, CHANNELS, true);
 }
 
 bool CSoundFontSynth::SwitchSoundFont(size_t nIndex)

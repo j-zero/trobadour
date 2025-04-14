@@ -244,6 +244,7 @@ void CUserInterface::DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannel
 		const u8 nBarWidth = (LCD.Width() - nTotalBarSpacing) / nChannels;
 		const u8 nTotalBarWidth = nBarWidth * nChannels;
 		const u8 nBarOffsetX = (LCD.Width() - nTotalBarWidth - nTotalBarSpacing) / 2;
+		//LCD.Print(pText, 0, 1, true);
 		DrawChannelLevelsGraphical(LCD, nBarOffsetX, 0, nBarWidth, nBarHeight, BarSpacingPixels, pChannelLevels, pPeakLevels, nChannels, bDrawBarBases);
 	}
 }
