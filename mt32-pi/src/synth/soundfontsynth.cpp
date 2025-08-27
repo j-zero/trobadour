@@ -137,7 +137,7 @@ CSoundFontSynth::CSoundFontSynth(unsigned nSampleRate)
 	  m_pSettings(nullptr),
 	  m_pSynth(nullptr),
 
-	  m_nVolume(100),
+	  m_nVolume(25),
 	  m_nInitialGain(0.2f),
 
 	  m_nPercussionMask(1 << 9),
@@ -247,8 +247,14 @@ void CSoundFontSynth::HandleMIDIShortMessage(u32 nMessage)
 		// Control change
 		case 0xB0:
 			if(nData1 == 70)
-				fluid_synth_program_change(m_pSynth, nChannel, nData2); // AKAI MPK miniplay Hack
-
+				fluid_synth_program_change(m_pSynth, 0, nData2); // AKAI MPK miniplay Hack
+			else if(nData1 == 71)
+				fluid_synth_cc(m_pSynth, 0, 7, nData2); // AKAI MPK miniplay Hack Volume
+			else if(nData1 == 72)
+				fluid_synth_program_change(m_pSynth, 10, nData2); // AKAI MPK miniplay Hack
+			else if(nData1 == 73)
+				fluid_synth_set_gain(m_pSynth, (nData2 / 127.0f) * 10.0f);
+			else
 			fluid_synth_cc(m_pSynth, nChannel, nData1, nData2);
 			break;
 
@@ -337,8 +343,8 @@ void CSoundFontSynth::ReportStatus() const
 
 void CSoundFontSynth::UpdateLCD(CLCD& LCD, unsigned int nTicks)
 {
-	//const u8 nBarHeight = LCD.Height();
-	const u8 nBarHeight = 16;
+	const u8 nBarHeight = LCD.Height();
+	//const u8 nBarHeight = 16;
 	float ChannelLevels[CHANNELS], PeakLevels[CHANNELS];
 	m_MIDIMonitor.GetChannelLevels(nTicks, ChannelLevels, PeakLevels, m_nPercussionMask);
 	CUserInterface::DrawChannelLevels(LCD, nBarHeight, ChannelLevels, PeakLevels, CHANNELS, true);
