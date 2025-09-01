@@ -247,15 +247,26 @@ void CSoundFontSynth::HandleMIDIShortMessage(u32 nMessage)
 		// Control change
 		case 0xB0:
 			if(nData1 == 70)
-				fluid_synth_program_change(m_pSynth, 0, nData2); // AKAI MPK miniplay Hack
-			else if(nData1 == 71)
-				fluid_synth_cc(m_pSynth, 0, 7, nData2); // AKAI MPK miniplay Hack Volume
+				fluid_synth_program_change(m_pSynth, 0, nData2); // AKAI MPK miniplay Hack // PC
+			else if(nData1 == 71){
+				fluid_synth_bank_select(m_pSynth, 0, nData2); // AKAI MPK miniplay Hack // BANK
+				fluid_synth_program_reset(m_pSynth);
+				//m_pUI->ShowSystemMessage(m_SoundFontManager.GetSoundFontName(m_nCurrentSoundFontIndex));
+				/*
+				fluid_synth_program_select 	( 	
+					fluid_synth_t *  	synth,
+					int  	chan,
+					int  	sfont_id,
+					int  	bank_num,
+					int  	preset_num 
+	) 		*/
+			}
 			else if(nData1 == 72)
-				fluid_synth_program_change(m_pSynth, 10, nData2); // AKAI MPK miniplay Hack
-			else if(nData1 == 73)
-				fluid_synth_set_gain(m_pSynth, (nData2 / 127.0f) * 10.0f);
+				fluid_synth_cc(m_pSynth, 0, 7, nData2); // AKAI MPK miniplay Hack Volume
+			//else if(nData1 == 73)
+			//	fluid_synth_set_gain(m_pSynth, (nData2 / 127.0f) * 10.0f);
 			else
-			fluid_synth_cc(m_pSynth, nChannel, nData1, nData2);
+				fluid_synth_cc(m_pSynth, nChannel, nData1, nData2);
 			break;
 
 		// Program change
