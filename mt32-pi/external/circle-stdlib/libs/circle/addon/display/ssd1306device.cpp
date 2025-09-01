@@ -239,7 +239,8 @@ void CSSD1306Device::DrawChar(char chChar, u8 nCursorX, u8 nCursorY, bool bInver
 
 	for (u8 i = 0; i < 6; ++i)
 	{
-		u16 nFontColumn = FontDouble[static_cast<u8>(chChar - ' ')][i];
+		//u16 nFontColumn = FontDouble[static_cast<u8>(chChar - ' ')][i];
+		u16 nFontColumn = FontSingle[static_cast<u8>(chChar - ' ')][i];
 
 		// Don't invert the leftmost column or last two rows
 		if (i > 0 && bInverted)

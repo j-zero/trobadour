@@ -20,6 +20,8 @@
 // mt32-pi. If not, see <http://www.gnu.org/licenses/>.
 //
 
+#define CHANNELS 16
+
 #ifndef _soundfontsynth_h
 #define _soundfontsynth_h
 
@@ -67,10 +69,15 @@ private:
 	fluid_synth_t* m_pSynth;
 
 	u8 m_nVolume;
+
 	float m_nInitialGain;
+
+	int CHANNEL_BANK[CHANNELS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	int CHANNEL_PROG[CHANNELS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 	u16 m_nPercussionMask;
 	size_t m_nCurrentSoundFontIndex;
+	u8 m_nCurrentChannel;
 
 	CSoundFontManager m_SoundFontManager;
 

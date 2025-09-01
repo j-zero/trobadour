@@ -55,7 +55,7 @@ public:
 
 	static u8 CenterMessageOffset(CLCD& LCD, const char* pMessage);
 	static void DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannelLevels, float* pPeakLevels, u8 nChannels, bool bDrawBarBases);
-	static void DrawHeader(CLCD& LCD, u8 Volume);
+	static void DrawHeader(CLCD& LCD, u8 Volume, const char* PresetName, int channel, int bank_num, int preset_num);
 	//static void DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannelLevels, float* pPeakLevels, u8 nChannels, bool bDrawBarBases, const char* pText);
 
 private:

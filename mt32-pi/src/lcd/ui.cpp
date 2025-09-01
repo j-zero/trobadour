@@ -231,12 +231,13 @@ u8 CUserInterface::CenterMessageOffset(CLCD& LCD, const char* pMessage)
 	return nMessageLength >= nCharWidth ? 0 : (nCharWidth - nMessageLength) / 2;
 }
 
-void CUserInterface::DrawHeader(CLCD& LCD, u8 Volume)
+void CUserInterface::DrawHeader(CLCD& LCD, u8 Volume, const char* PresetName, int channel, int bank_num, int preset_num)
 {
 	if (LCD.GetType() == CLCD::TType::Graphical)
 	{
-		snprintf(m_HeaderTextBuffer, sizeof(m_HeaderTextBuffer), "Power saving mode");
-		//LCD.Print(Volume, 0,0,true, true);
+		char m_HeaderTextBuffer[HeaderTextBufferSize];
+		snprintf(m_HeaderTextBuffer, sizeof(m_HeaderTextBuffer), "%d:%d:%d %s", channel, bank_num, preset_num, PresetName);
+		LCD.Print(m_HeaderTextBuffer, 0,0,true);
 	}
 
 }
@@ -257,7 +258,7 @@ void CUserInterface::DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannel
 		const u8 nBarOffsetX = (LCD.Width() - nTotalBarWidth - nTotalBarSpacing) / 2;
 		//LCD.Print(pText, 0, 1, true);
 		//DrawChannelLevelsGraphical(LCD, nBarOffsetX, 0, nBarWidth, nBarHeight, BarSpacingPixels, pChannelLevels, pPeakLevels, nChannels, bDrawBarBases);
-		DrawChannelLevelsGraphical(LCD, nBarOffsetX, 0, nBarWidth, nBarHeight, BarSpacingPixels, pChannelLevels, pPeakLevels, nChannels, bDrawBarBases);
+		DrawChannelLevelsGraphical(LCD, nBarOffsetX, 32, nBarWidth, nBarHeight, BarSpacingPixels, pChannelLevels, pPeakLevels, nChannels, bDrawBarBases);
 	}
 }
 

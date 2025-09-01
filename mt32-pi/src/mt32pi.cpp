@@ -273,7 +273,7 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 	//LCDLog(TLCDLogType::Startup, "Init mt32emu");
 	//InitMT32Synth();
 
-	LCDLog(TLCDLogType::Startup, "Init FluidSynth");
+	LCDLog(TLCDLogType::Startup, "Loading FluidSynth");
 	InitSoundFontSynth();
 
 	// Set initial synthesizer
@@ -1015,7 +1015,7 @@ void CMT32Pi::ProcessEventQueue()
 			case TEventType::Button:
 				ProcessButtonEvent(Event.Button);
 				break;
-			/*
+			
 			case TEventType::SwitchSynth:
 				SwitchSynth(Event.SwitchSynth.Synth);
 				break;
@@ -1023,14 +1023,14 @@ void CMT32Pi::ProcessEventQueue()
 			case TEventType::SwitchMT32ROMSet:
 				SwitchMT32ROMSet(Event.SwitchMT32ROMSet.ROMSet);
 				break;
-			*/
+			
 			case TEventType::SwitchSoundFont:
 				DeferSwitchSoundFont(Event.SwitchSoundFont.Index);
 				break;
 
 			case TEventType::AllSoundOff:
-				if (m_pMT32Synth)
-					m_pMT32Synth->AllSoundOff();
+				//if (m_pMT32Synth)
+				//	m_pMT32Synth->AllSoundOff();
 				if (m_pSoundFontSynth)
 					m_pSoundFontSynth->AllSoundOff();
 				break;
