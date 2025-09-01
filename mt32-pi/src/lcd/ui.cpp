@@ -236,10 +236,8 @@ void CUserInterface::DrawHeader(CLCD& LCD, u8 Volume, const char* PresetName, in
 	if (LCD.GetType() == CLCD::TType::Graphical)
 	{
 		char m_HeaderTextBuffer[HeaderTextBufferSize];
-		snprintf(m_HeaderTextBuffer, sizeof(m_HeaderTextBuffer), "%03d:%03d:%03d", channel, bank_num, preset_num);
+		snprintf(m_HeaderTextBuffer, sizeof(m_HeaderTextBuffer), "%03d:%03d:%03d\n%s", channel, bank_num, preset_num,PresetName);
 		LCD.Print(m_HeaderTextBuffer, 0,0,true);
-		snprintf(m_HeaderTextBuffer, sizeof(m_HeaderTextBuffer), "%s", PresetName);
-		LCD.Print(m_HeaderTextBuffer, 0,9,true);
 	}
 
 }
