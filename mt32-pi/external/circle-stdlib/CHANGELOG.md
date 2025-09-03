@@ -1,5 +1,50 @@
 # Release History
 
+## [v16.8](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.8)
+
+* Fixed issue #45: The Circle library was not built in parallel mode if the top-level make 
+was invoked with `-j`.
+* Synced with [Circle Step 49.0.1](https://github.com/rsta2/circle/releases/tag/Step49.0.1).
+* Update Mbed TLS to [release v2.28.10](https://github.com/Mbed-TLS/mbedtls/releases/tag/mbedtls-2.28.10).
+
+## [v16.7](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.7)
+
+* Synced with [Circle Step 49](https://github.com/rsta2/circle/releases/tag/Step49).
+* Fixed a crash in the MQTT client.
+
+## [v16.6](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.6)
+
+* Synced with [Circle Step 48](https://github.com/rsta2/circle/releases/tag/Step48).
+* Update Mbed TLS to [release v2.28.9](https://github.com/Mbed-TLS/mbedtls/releases/tag/mbedtls-2.28.9).
+* Fixed invalid payload in MQTT client.
+* Fixed broken GitHub action caused by missing dependencies of the old QEMU 6.0.0 release. 
+
+## [v16.5](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.5)
+
+* Synced with [Circle Step 47](https://github.com/rsta2/circle/releases/tag/Step47).
+* Update Mbed TLS to [release v2.28.8](https://github.com/Mbed-TLS/mbedtls/releases/tag/v2.28.8).
+* Aligned toolchain version with Circle (ARM Gnu toolchain 13.2.Rel1).
+
+## [v16.4](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.4)
+
+* Fixed issue #35 "No output from printf() in samples/02-stdio-hello with v16.3".
+
+## [v16.3](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.3)
+
+* Synced with [Circle Step 46](https://github.com/rsta2/circle/releases/tag/Step46).
+* Fixed duplicate definition of fcntl().
+
+## [v16.2](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.2)
+
+* Synced with [Circle Step 45.3.1](https://github.com/rsta2/circle/releases/tag/Step45.3.1).
+* Update Mbed TLS to [release v2.28.4](https://github.com/Mbed-TLS/mbedtls/releases/tag/v2.28.4).
+
+## [v16.1](https://github.com/smuehlst/circle-stdlib/releases/tag/v16.1)
+
+* Synced with [Circle Step 45.2](https://github.com/rsta2/circle/releases/tag/Step45.2).
+* Update mbed TLS to [release v2.28.3](https://github.com/Mbed-TLS/mbedtls/releases/tag/v2.28.3).
+* Aligned toolchain version with Circle (ARM Gnu toolchain 12.2.Rel1).
+
 ## [v16](https://github.com/smuehlst/circle-stdlib/releases/tag/v16)
 
 * Synced with [Circle Step 45.1](https://github.com/rsta2/circle/releases/tag/Step45.1).

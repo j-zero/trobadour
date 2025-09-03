@@ -33,6 +33,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 using namespace std;
 
@@ -576,6 +577,18 @@ CKernel::IoTest (void)
         Report ("fork() is not implemented, fails as expected");
     }
 
+    // Check fix for issue #35.
+    Report ("File descriptors 0, 1, 2 are character special files");
+
+    for (int fd = 0; fd < 3; fd += 1)
+    {
+        struct stat statbuf;
+        if (fstat(fd, &statbuf) == -1 || !S_ISCHR(statbuf.st_mode))
+        {
+            PErrorExit ("Check for S_ISCHR() on stdin/stdout/stderr failed");
+        }
+    };
+
     Report ("Redirect stdout");
 
     FILE * const redirected_stdout = freopen ("redirected_stdout.txt", "w", stdout);
@@ -597,7 +610,7 @@ CKernel::IoTest (void)
     }
 
     {
-        Report ("dup () and dup2 () tests");
+        Report ("dup (), dup2 (), fcntl () tests");
 
         int const original_fd = fileno (redirected_stdout);
 
@@ -628,9 +641,19 @@ CKernel::IoTest (void)
         
         assert (fd_copy2 > fd_copy);
 
-        if (write (fd_copy2, dup_text, sizeof (dup_text) - 1) == -1)
+        int const fd_copy3 = fcntl (fd_copy2, F_DUPFD, 0);
+
+        if (fd_copy3 == -1)
         {
-            PErrorExit ("write () via fd_copy2 failed");
+            PErrorExit ("fcntl () failed");
+        }
+
+        assert (fd_copy3 > fd_copy);
+        assert (fd_copy3 > fd_copy2);
+
+        if (write (fd_copy3, dup_text, sizeof (dup_text) - 1) == -1)
+        {
+            PErrorExit ("write () via fd_copy3 failed");
         }
 
         if (close (fd_copy) < 0)
@@ -641,6 +664,11 @@ CKernel::IoTest (void)
         if (close (fd_copy2) < 0)
         {
             PErrorExit ("close (fd_copy2) failed");
+        }
+
+        if (close (fd_copy3) < 0)
+        {
+            PErrorExit ("close (fd_copy3) failed");
         }
     }
 

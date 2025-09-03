@@ -2,7 +2,7 @@
 // serial.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2021  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 #include <circle/devicenameservice.h>
 #include <circle/bcm2835.h>
 #include <circle/memio.h>
+#include <circle/rp1int.h>
 #include <circle/machineinfo.h>
 #include <circle/synchronize.h>
 #include <assert.h>
@@ -105,6 +106,14 @@
 #define INT_DCDM		(1 << 2)
 #define INT_CTSM		(1 << 1)
 
+#define ALT_FUNC(device, gpio)	((TGPIOMode) (  s_GPIOConfig[device][gpio][VALUE_ALT] \
+					      + GPIOModeAlternateFunction0))
+
+#define NONE	{10000, 10000}		// UART does not exist
+#define NOALT	{GPIO_PINS, 10}		// UART does not need an ALT setting
+
+#if RASPPI <= 4
+
 static uintptr s_BaseAddress[SERIAL_DEVICES] =
 {
 	ARM_IO_BASE + 0x201000,
@@ -116,8 +125,6 @@ static uintptr s_BaseAddress[SERIAL_DEVICES] =
 	ARM_IO_BASE + 0x201A00
 #endif
 };
-
-#define NONE	{10000, 10000}
 
 static unsigned s_GPIOConfig[SERIAL_DEVICES][GPIOS][VALUES] =
 {
@@ -140,8 +147,55 @@ static unsigned s_GPIOConfig[SERIAL_DEVICES][GPIOS][VALUES] =
 #endif
 };
 
-#define ALT_FUNC(device, gpio)	((TGPIOMode) (  s_GPIOConfig[device][gpio][VALUE_ALT] \
-					      + GPIOModeAlternateFunction0))
+#else	// #if RASPPI <= 4
+
+static uintptr s_BaseAddress[SERIAL_DEVICES] =
+{
+	0x1F00030000UL,
+	0x1F00034000UL,
+	0x1F00038000UL,
+	0x1F0003C000UL,
+	0x1F00040000UL,
+	0x1F00044000UL,
+	0,
+	0,
+	0,
+	0,
+	ARM_IO_BASE + 0x1001000
+};
+
+static unsigned s_GPIOConfig[SERIAL_DEVICES][GPIOS][VALUES] =
+{
+	// TXD      RXD
+	{{14,  4}, {15,  4}},
+	{{ 0,  2}, { 1,  2}},
+	{{ 4,  2}, { 5,  2}},
+	{{ 8,  2}, { 9,  2}},
+	{{12,  2}, {13,  2}},
+	{{36,  1}, {37,  1}},
+	{  NONE,     NONE  }, // unused
+	{  NONE,     NONE  }, // unused
+	{  NONE,     NONE  }, // unused
+	{  NONE,     NONE  }, // unused
+	{  NOALT,    NOALT }
+};
+
+static unsigned s_IRQ[SERIAL_DEVICES] =
+{
+	RP1_IRQ_UART0,
+	RP1_IRQ_UART1,
+	RP1_IRQ_UART2,
+	RP1_IRQ_UART3,
+	RP1_IRQ_UART4,
+	RP1_IRQ_UART5,
+	0,
+	0,
+	0,
+	0,
+	ARM_IRQ_UART
+};
+
+#endif
 
 unsigned CSerialDevice::s_nInterruptUseCount = 0;
 CInterruptSystem *CSerialDevice::s_pInterruptSystem = 0;
@@ -151,7 +205,11 @@ CSerialDevice *CSerialDevice::s_pThis[SERIAL_DEVICES] = {0};
 
 CSerialDevice::CSerialDevice (CInterruptSystem *pInterruptSystem, boolean bUseFIQ, unsigned nDevice)
 :	m_pInterruptSystem (pInterruptSystem),
+#if RASPPI <= 4
 	m_bUseFIQ (bUseFIQ),
+#else
+	m_bUseFIQ (FALSE),		// silently use the IRQ instead
+#endif
 	m_nDevice (nDevice),
 	m_nBaseAddress (0),
 	m_bValid (FALSE),
@@ -161,14 +219,21 @@ CSerialDevice::CSerialDevice (CInterruptSystem *pInterruptSystem, boolean bUseFI
 	m_nTxInPtr (0),
 	m_nTxOutPtr (0),
 	m_nOptions (SERIAL_OPTION_ONLCR),
+	m_pCharReceivedHandler (0),
 	m_pMagic (0),
 	m_SpinLock (bUseFIQ ? FIQ_LEVEL : IRQ_LEVEL)
 #ifdef REALTIME
 	, m_LineSpinLock (TASK_LEVEL)
 #endif
 {
+#if RASPPI == 5
+	s_IRQ[10] =   CMachineInfo::Get ()->GetSoCStepping () >= SoCSteppingD0
+		    ? ARM_IRQ_UART_D0 : ARM_IRQ_UART;
+#endif
+
 	if (   m_nDevice >= SERIAL_DEVICES
-	    || s_GPIOConfig[nDevice][0][VALUE_PIN] >= GPIO_PINS)
+	    || s_GPIOConfig[nDevice][0][VALUE_PIN] > GPIO_PINS
+	   )
 	{
 		return;
 	}
@@ -179,7 +244,7 @@ CSerialDevice::CSerialDevice (CInterruptSystem *pInterruptSystem, boolean bUseFI
 	m_nBaseAddress = s_BaseAddress[nDevice];
 	assert (m_nBaseAddress != 0);
 
-#if SERIAL_GPIO_SELECT == 14
+#if SERIAL_GPIO_SELECT == 14 && RASPPI <= 4
 	if (nDevice == 0)
 	{
 		// to be sure there is no collision with the Bluetooth controller
@@ -191,12 +256,20 @@ CSerialDevice::CSerialDevice (CInterruptSystem *pInterruptSystem, boolean bUseFI
 	}
 #endif
 
-	m_TxDPin.AssignPin (s_GPIOConfig[nDevice][GPIO_TXD][VALUE_PIN]);
-	m_TxDPin.SetMode (ALT_FUNC (nDevice, GPIO_TXD));
+	TGPIOMode GPIOMode = ALT_FUNC (nDevice, GPIO_TXD);
+	if (GPIOMode < GPIOModeUnknown)
+	{
+		m_TxDPin.AssignPin (s_GPIOConfig[nDevice][GPIO_TXD][VALUE_PIN]);
+		m_TxDPin.SetMode (GPIOMode);
+	}
 
-	m_RxDPin.AssignPin (s_GPIOConfig[nDevice][GPIO_RXD][VALUE_PIN]);
-	m_RxDPin.SetMode (ALT_FUNC (nDevice, GPIO_RXD));
-	m_RxDPin.SetPullMode (GPIOPullModeUp);
+	GPIOMode = ALT_FUNC (nDevice, GPIO_RXD);
+	if (GPIOMode < GPIOModeUnknown)
+	{
+		m_RxDPin.AssignPin (s_GPIOConfig[nDevice][GPIO_RXD][VALUE_PIN]);
+		m_RxDPin.SetMode (GPIOMode);
+		m_RxDPin.SetPullMode (GPIOPullModeUp);
+	}
 
 	m_bValid = TRUE;
 }
@@ -219,6 +292,7 @@ CSerialDevice::~CSerialDevice (void)
 	write32 (ARM_UART_CR, 0);
 	PeripheralExit ();
 
+#if RASPPI <= 4
 	// disconnect interrupt, if this is the last device, which uses interrupts
 	if (   m_pInterruptSystem != 0
 	    && --s_nInterruptUseCount == 0)
@@ -236,9 +310,29 @@ CSerialDevice::~CSerialDevice (void)
 		s_pInterruptSystem = 0;
 		s_bUseFIQ = FALSE;
 	}
+#else
+	if (s_pInterruptSystem != 0)
+	{
+		s_pInterruptSystem->DisconnectIRQ (s_IRQ[m_nDevice]);
 
-	m_TxDPin.SetMode (GPIOModeInput);
-	m_RxDPin.SetMode (GPIOModeInput);
+		if (--s_nInterruptUseCount == 0)
+		{
+			s_pInterruptSystem = 0;
+		}
+	}
+#endif
+
+	TGPIOMode GPIOMode = ALT_FUNC (m_nDevice, GPIO_TXD);
+	if (GPIOMode < GPIOModeUnknown)
+	{
+		m_TxDPin.SetMode (GPIOModeInput);
+	}
+
+	GPIOMode = ALT_FUNC (m_nDevice, GPIO_RXD);
+	if (GPIOMode < GPIOModeUnknown)
+	{
+		m_RxDPin.SetMode (GPIOModeInput);
+	}
 
 	s_pThis[m_nDevice] = 0;
 	m_bValid = FALSE;
@@ -252,7 +346,17 @@ boolean CSerialDevice::Initialize (unsigned nBaudrate,
 		return FALSE;
 	}
 
-	unsigned nClockRate = CMachineInfo::Get ()->GetClockRate (CLOCK_ID_UART);
+	unsigned nClockRate;
+#if RASPPI >= 5
+	if (m_nDevice < 10)
+	{
+		nClockRate = 50000000;
+	}
+	else
+#endif
+	{
+		nClockRate = CMachineInfo::Get ()->GetClockRate (CLOCK_ID_UART);
+	}
 	assert (nClockRate > 0);
 
 	assert (300 <= nBaudrate && nBaudrate <= 4000000);
@@ -265,6 +369,7 @@ boolean CSerialDevice::Initialize (unsigned nBaudrate,
 
 	if (m_pInterruptSystem != 0)		// do we want to use interrupts?
 	{
+#if RASPPI <= 4
 		if (s_nInterruptUseCount > 0)
 		{
 			// if there is already an interrupt enabled device,
@@ -294,6 +399,26 @@ boolean CSerialDevice::Initialize (unsigned nBaudrate,
 				s_pInterruptSystem->ConnectFIQ (ARM_FIQ_UART, InterruptStub, 0);
 			}
 		}
+#else
+		assert (!m_bUseFIQ);
+
+		if (s_nInterruptUseCount > 0)
+		{
+			if (m_pInterruptSystem != s_pInterruptSystem)
+			{
+				s_pThis[m_nDevice] = 0;
+				m_bValid = FALSE;
+
+				return FALSE;
+			}
+		}
+		else
+		{
+			s_pInterruptSystem = m_pInterruptSystem;
+		}
+
+		s_pInterruptSystem->ConnectIRQ (s_IRQ[m_nDevice], InterruptStub, 0);
+#endif
 
 		assert (s_nInterruptUseCount < SERIAL_DEVICES);
 		s_nInterruptUseCount++;
@@ -337,6 +462,14 @@ boolean CSerialDevice::Initialize (unsigned nBaudrate,
 
 	case ParityEven:
 		nLCRH |= LCRH_PEN_MASK | LCRH_EPS_MASK;
+		break;
+
+	case ParitySpace:
+		nLCRH |= LCRH_PEN_MASK | LCRH_SPS_MASK | LCRH_EPS_MASK;
+		break;
+
+	case ParityMark:
+		nLCRH |= LCRH_PEN_MASK | LCRH_SPS_MASK;
 		break;
 
 	default:
@@ -539,6 +672,83 @@ void CSerialDevice::SetOptions (unsigned nOptions)
 	m_nOptions = nOptions;
 }
 
+void CSerialDevice::SetParity (TParity Parity)
+{
+	while (IsTransmitting ())
+	{
+		// just wait
+	}
+
+	PeripheralEntry ();
+
+	write32 (ARM_UART_CR, read32 (ARM_UART_CR) & ~CR_UART_EN_MASK);
+
+	while (IsTransmitting ())
+	{
+		// just wait
+	}
+
+	u32 nLCRH = read32 (ARM_UART_LCRH);
+	nLCRH &= ~(LCRH_PEN_MASK | LCRH_SPS_MASK | LCRH_EPS_MASK);
+
+	switch (Parity)
+	{
+	case ParityNone:
+		break;
+
+	case ParityOdd:
+		nLCRH |= LCRH_PEN_MASK;
+		break;
+
+	case ParityEven:
+		nLCRH |= LCRH_PEN_MASK | LCRH_EPS_MASK;
+		break;
+
+	case ParitySpace:
+		nLCRH |= LCRH_PEN_MASK | LCRH_SPS_MASK | LCRH_EPS_MASK;
+		break;
+
+	case ParityMark:
+		nLCRH |= LCRH_PEN_MASK | LCRH_SPS_MASK;
+		break;
+
+	default:
+		assert (0);
+		break;
+	}
+
+	write32 (ARM_UART_LCRH, nLCRH);
+
+	write32 (ARM_UART_CR, read32 (ARM_UART_CR) | CR_UART_EN_MASK);
+
+	PeripheralExit ();
+}
+
+boolean CSerialDevice::IsTransmitting (void) const
+{
+	if (   m_pInterruptSystem != 0
+	    && m_nTxInPtr != m_nTxOutPtr)
+	{
+		return TRUE;
+	}
+
+	PeripheralEntry ();
+
+	u32 nFR = read32 (ARM_UART_FR);
+
+	PeripheralExit ();
+
+	return !!(nFR & FR_BUSY_MASK);
+}
+
+void CSerialDevice::RegisterCharReceivedHandler (TCharReceivedHandler *pHandler, void *pParam)
+{
+	assert (m_pInterruptSystem != 0);
+
+	m_pParam = pParam;
+	m_pCharReceivedHandler = pHandler;
+}
+
 void CSerialDevice::RegisterMagicReceivedHandler (const char *pMagic, TMagicReceivedHandler *pHandler)
 {
 	assert (m_pInterruptSystem != 0);
@@ -669,6 +879,10 @@ void CSerialDevice::InterruptHandler (void)
 {
 	boolean bMagicReceived = FALSE;
 
+	boolean bCharReceived = FALSE;
+	u8 uchChar;
+	int nStatus;
+
 	m_SpinLock.Acquire ();
 
 	PeripheralEntry ();
@@ -723,7 +937,17 @@ void CSerialDevice::InterruptHandler (void)
 			}
 		}
 
-		if (((m_nRxInPtr+1) & SERIAL_BUF_MASK) != m_nRxOutPtr)
+		if (m_pCharReceivedHandler != 0)
+		{
+			bCharReceived = TRUE;
+			uchChar = nDR & 0xFF;
+
+			nStatus = m_nRxStatus;
+			m_nRxStatus = 0;
+
+			break;
+		}
+		else if (((m_nRxInPtr+1) & SERIAL_BUF_MASK) != m_nRxOutPtr)
 		{
 			m_RxBuffer[m_nRxInPtr++] = nDR & 0xFF;
 			m_nRxInPtr &= SERIAL_BUF_MASK;
@@ -759,6 +983,11 @@ void CSerialDevice::InterruptHandler (void)
 	if (bMagicReceived)
 	{
 		(*m_pMagicReceivedHandler) ();
+	}
+
+	if (bCharReceived)
+	{
+		(*m_pCharReceivedHandler) (uchChar, nStatus, m_pParam);
 	}
 }
 

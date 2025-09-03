@@ -2,7 +2,7 @@
 /// \file serial.h
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2021  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2024  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@
 /// \details GPIO pin mapping (chip numbers)
 /// nDevice | TXD    | RXD    | Support
 /// :-----: | :----: | :----: | :------
-/// 0       | GPIO14 | GPIO15 | All boards
+/// 0       | GPIO14 | GPIO15 | Raspberry Pi 1-4
 /// ^       | GPIO32 | GPIO33 | Compute Modules
 /// ^       | GPIO36 | GPIO37 | Compute Modules
 /// 1       |        |        | None (AUX)
@@ -44,14 +44,41 @@
 /// GPIO32/33 and GPIO36/37 can be selected with system option SERIAL_GPIO_SELECT.\n
 /// GPIO0/1 are normally reserved for ID EEPROM.\n
 /// Handshake lines CTS and RTS are not supported.
+///
+/// nDevice | TXD    | RXD    | Support
+/// :-----: | :----: | :----: | :------
+/// 0       | GPIO14 | GPIO15 | Raspberry Pi 5 only
+/// 1       | GPIO0  | GPIO1  | Raspberry Pi 5 only
+/// 2       | GPIO4  | GPIO5  | Raspberry Pi 5 only
+/// 3       | GPIO8  | GPIO9  | Raspberry Pi 5 only
+/// 4       | GPIO12 | GPIO13 | Raspberry Pi 5 only
+/// 5       | GPIO36 | GPIO37 | None
+/// 6       |        |        | None
+/// 7       |        |        | None
+/// 8       |        |        | None
+/// 9       |        |        | None
+/// 10      | UART   | UART   | Raspberry Pi 5 only
+/// UART is the dedicated 3-pin JST UART connector.
 
 #if RASPPI < 4
 	#define SERIAL_DEVICES		1
-#else
+#elif RASPPI == 4
 	#define SERIAL_DEVICES		6
+#else
+	#define SERIAL_DEVICES		11
 #endif
 
+#ifndef SERIAL_DEVICE_DEFAULT
+#if RASPPI <= 4
+	#define SERIAL_DEVICE_DEFAULT	0
+#else
+	#define SERIAL_DEVICE_DEFAULT	10
+#endif
+#endif
+
+#ifndef SERIAL_BUF_SIZE
 #define SERIAL_BUF_SIZE		2048			// must be a power of 2
+#endif
 #define SERIAL_BUF_MASK		(SERIAL_BUF_SIZE-1)
 
 // serial options
@@ -71,6 +98,8 @@ public:
 		ParityNone,
 		ParityOdd,
 		ParityEven,
+		ParitySpace,		///< parity bit is 0
+		ParityMark,		///< parity bit is 1
 		ParityUnknown
 	};
 
@@ -80,7 +109,7 @@ public:
 	/// \param bUseFIQ Use FIQ instead of IRQ
 	/// \param nDevice Device number (see: GPIO pin mapping)
 	CSerialDevice (CInterruptSystem *pInterruptSystem = 0, boolean bUseFIQ = FALSE,
-		       unsigned nDevice = 0);
+		       unsigned nDevice = SERIAL_DEVICE_DEFAULT);
 
 	~CSerialDevice (void);
 #endif
@@ -88,7 +117,7 @@ public:
 	/// \param nBaudrate Baud rate in bits per second
 	/// \param nDataBits Number of data bits (5..8, default 8)
 	/// \param nStopBits Number of stop bits (1..2, default 1)
-	/// \param Parity Parity setting (ParityNone (default), ParityOdd or ParityEven)
+	/// \param Parity Parity setting
 	/// \return Operation successful?
 #ifndef USE_RPI_STUB_AT
 	boolean Initialize (unsigned nBaudrate = 115200,
@@ -113,6 +142,24 @@ public:
 	unsigned GetOptions (void) const;
 	/// \param nOptions Serial options mask (see serial options)
 	void SetOptions (unsigned nOptions);
+
+	/// \brief Modifiy the partity setting
+	/// \param Parity Parity setting
+	/// \note This will disable the UART for a small time.
+	void SetParity (TParity Parity);
+
+	/// \return Is the transmitter busy, transmitting characters?
+	boolean IsTransmitting (void) const;
+
+	/// \param uchChar Character code
+	/// \param nStatus SERIAL_ERROR_* code as a negative value, or 0 (no error)
+	/// \param pParam User parameter
+	typedef void TCharReceivedHandler (u8 uchChar, int nStatus, void *pParam);
+	/// \param pHandler Handler which is called, when a character has been received
+	/// \param pParam User parameter, which is handed over to the handler
+	/// \note Read() does not work, when this handler is registered.
+	/// \note Does only work with interrupt driver.
+	void RegisterCharReceivedHandler (TCharReceivedHandler *pHandler, void *pParam);
 
 	typedef void TMagicReceivedHandler (void);
 	/// \param pMagic String for which is searched in the received data\n
@@ -150,7 +197,7 @@ private:
 	uintptr  m_nBaseAddress;
 	boolean  m_bValid;
 
-#if SERIAL_GPIO_SELECT == 14
+#if SERIAL_GPIO_SELECT == 14 && RASPPI <= 4
 	CGPIOPin m_GPIO32;
 	CGPIOPin m_GPIO33;
 #endif
@@ -167,6 +214,9 @@ private:
 	volatile unsigned m_nTxOutPtr;
 
 	unsigned m_nOptions;
+
+	TCharReceivedHandler *m_pCharReceivedHandler;
+	void *m_pParam;
 
 	const char *m_pMagic;
 	const char *m_pMagicPtr;

@@ -42,7 +42,6 @@ CUserInterface::CUserInterface()
 	  m_nCurrentSpinnerChar(0),
 	  m_CurrentImage(TImage::None),
 	  m_SystemMessageTextBuffer{'\0'},
-	  m_HeaderTextBuffer{'\0'},
 	  m_SysExDisplayMessageType(TSysExDisplayMessage::Roland),
 	  m_SysExTextBuffer{'\0'},
 	  m_SysExPixelBuffer{0}
@@ -231,17 +230,6 @@ u8 CUserInterface::CenterMessageOffset(CLCD& LCD, const char* pMessage)
 	return nMessageLength >= nCharWidth ? 0 : (nCharWidth - nMessageLength) / 2;
 }
 
-void CUserInterface::DrawHeader(CLCD& LCD, u8 Volume, const char* PresetName, int channel, int bank_num, int preset_num)
-{
-	if (LCD.GetType() == CLCD::TType::Graphical)
-	{
-		char m_HeaderTextBuffer[HeaderTextBufferSize];
-		snprintf(m_HeaderTextBuffer, sizeof(m_HeaderTextBuffer), "%d:%d:%d %s", channel, bank_num, preset_num, PresetName);
-		LCD.Print(m_HeaderTextBuffer, 0,0,true);
-	}
-
-}
-
 void CUserInterface::DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannelLevels, float* pPeakLevels, u8 nChannels, bool bDrawBarBases)
 {
 	if (LCD.GetType() == CLCD::TType::Character)
@@ -256,13 +244,9 @@ void CUserInterface::DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannel
 		const u8 nBarWidth = (LCD.Width() - nTotalBarSpacing) / nChannels;
 		const u8 nTotalBarWidth = nBarWidth * nChannels;
 		const u8 nBarOffsetX = (LCD.Width() - nTotalBarWidth - nTotalBarSpacing) / 2;
-		//LCD.Print(pText, 0, 1, true);
-		//DrawChannelLevelsGraphical(LCD, nBarOffsetX, 0, nBarWidth, nBarHeight, BarSpacingPixels, pChannelLevels, pPeakLevels, nChannels, bDrawBarBases);
-		DrawChannelLevelsGraphical(LCD, nBarOffsetX, 32, nBarWidth, nBarHeight, BarSpacingPixels, pChannelLevels, pPeakLevels, nChannels, bDrawBarBases);
+		DrawChannelLevelsGraphical(LCD, nBarOffsetX, 0, nBarWidth, nBarHeight, BarSpacingPixels, pChannelLevels, pPeakLevels, nChannels, bDrawBarBases);
 	}
 }
-
-
 
 void CUserInterface::DrawChannelLevelsCharacter(CLCD& LCD, u8 nRows, u8 nBarOffsetX, u8 nBarYOffset, u8 nBarSpacing, const float* pChannelLevels, u8 nChannels, bool bDrawBarBases)
 {

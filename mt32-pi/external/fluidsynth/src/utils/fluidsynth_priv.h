@@ -31,9 +31,8 @@
 
 #include "config.h"
 
-#if 0
-#include <glib.h>
-#endif
+#define TRUE 1
+#define FALSE 0
 
 #if HAVE_STDLIB_H
 #include <stdlib.h> // malloc, free
@@ -47,6 +46,9 @@
 #include <string.h>
 #endif
 
+#if HAVE_STRINGS_H
+#include <strings.h>
+#endif
 
 #include "fluidsynth.h"
 
@@ -203,7 +205,7 @@ void* fluid_realloc(void* ptr, size_t len);
 
 FILE *fluid_fopen(const char *filename, const char *mode);
 
-#ifdef WIN32
+#ifdef _WIN32
 #define FLUID_FSEEK(_f,_n,_set)      _fseeki64(_f,_n,_set)
 #else
 #define FLUID_FSEEK(_f,_n,_set)      fseek(_f,_n,_set)
@@ -239,7 +241,7 @@ do { strncpy(_dst,_src,_n-1); \
 #define FLUID_SPRINTF                sprintf
 #define FLUID_FPRINTF                fprintf
 
-#if (defined(WIN32) && _MSC_VER < 1900) || defined(MINGW32)
+#if (defined(_WIN32) && _MSC_VER < 1900) || defined(MINGW32)
 /* need to make sure we use a C99 compliant implementation of (v)snprintf(),
  * i.e. not microsofts non compliant extension _snprintf() as it doesn't
  * reliably null-terminate the buffer
@@ -249,19 +251,19 @@ do { strncpy(_dst,_src,_n-1); \
 #define FLUID_SNPRINTF           snprintf
 #endif
 
-#if (defined(WIN32) && _MSC_VER < 1500) || defined(MINGW32)
+#if (defined(_WIN32) && _MSC_VER < 1500) || defined(MINGW32)
 #define FLUID_VSNPRINTF          g_vsnprintf
 #else
 #define FLUID_VSNPRINTF          vsnprintf
 #endif
 
-#if defined(WIN32) && !defined(MINGW32)
+#if defined(_WIN32) && !defined(MINGW32)
 #define FLUID_STRCASECMP         _stricmp
 #else
 #define FLUID_STRCASECMP         strcasecmp
 #endif
 
-#if defined(WIN32) && !defined(MINGW32)
+#if defined(_WIN32) && !defined(MINGW32)
 #define FLUID_STRNCASECMP         _strnicmp
 #else
 #define FLUID_STRNCASECMP         strncasecmp
@@ -296,10 +298,6 @@ do { strncpy(_dst,_src,_n-1); \
 #define FLUID_ASSERT(a)
 #endif
 
-#if 0
-#define FLUID_LIKELY G_LIKELY
-#define FLUID_UNLIKELY G_UNLIKELY
-#endif
 #define FLUID_LIKELY(cond) __builtin_expect((cond), 1)
 #define FLUID_UNLIKELY(cond) __builtin_expect((cond), 0)
 

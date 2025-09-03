@@ -2,7 +2,7 @@
 // dmachannel.h
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2020  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -57,8 +57,11 @@ public:
 	// nBurstLength > 0 increases speed, but may congest the system bus
 	void SetupMemCopy (void *pDestination, const void *pSource, size_t nLength,
 			   unsigned nBurstLength = 0, boolean bCached = TRUE);
-	void SetupIORead (void *pDestination, u32 nIOAddress, size_t nLength, TDREQ DREQ);
-	void SetupIOWrite (u32 nIOAddress, const void *pSource, size_t nLength, TDREQ DREQ);
+	void SetupIORead (void *pDestination, uintptr ulIOAddress, size_t nLength, TDREQ DREQ);
+	void SetupIOWrite (uintptr ulIOAddress, const void *pSource, size_t nLength, TDREQ DREQ);
+
+	void SetupCyclicIOWrite (uintptr ulIOAddress, const void *ppSources[], unsigned nBuffers,
+				 size_t ulLength, TDREQ DREQ);
 
 	// copy nBlockCount blocks of nBlockLength size and skip nBlockStride bytes after
 	// each block on destination, source is continuous, destination cache is not touched
@@ -74,6 +77,8 @@ public:
 	boolean Wait (void);		// for synchronous call without completion routine
 	boolean GetStatus (void);
 
+	void Cancel (void);
+
 private:
 	void InterruptHandler (void);
 	static void InterruptStub (void *pParam);
@@ -81,8 +86,13 @@ private:
 private:
 	unsigned m_nChannel;
 
-	u8 *m_pControlBlockBuffer;
-	TDMA4ControlBlock *m_pControlBlock;
+	static const int MaxCyclicBuffers = 4;
+	TDMA4ControlBlock *m_pControlBlock[MaxCyclicBuffers];
+
+	unsigned m_nBuffers;
+	volatile unsigned m_nCurrentBuffer;
+
+	const void *m_pBuffer[MaxCyclicBuffers];
 
 	CInterruptSystem *m_pInterruptSystem;
 	boolean m_bIRQConnected;

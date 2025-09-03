@@ -25,6 +25,7 @@
 // THE SOFTWARE.
 //
 #include <display/st7789display.h>
+#include <circle/timer.h>
 #include <assert.h>
 
 #define ST7789_NOP	0x00
@@ -51,6 +52,7 @@
 #define ST7789_MADCTL	0x36
 #define ST7789_COLMOD	0x3A
 
+#define RAMCTRL		0xB0
 #define ST7789_FRMCTR1	0xB1
 #define ST7789_FRMCTR2	0xB2
 #define ST7789_FRMCTR3	0xB3
@@ -86,8 +88,9 @@ CST7789Display::CST7789Display (CSPIMaster *pSPIMaster,
 				unsigned nDCPin, unsigned nResetPin, unsigned nBackLightPin,
 				unsigned nWidth, unsigned nHeight,
 				unsigned CPOL, unsigned CPHA, unsigned nClockSpeed,
-				unsigned nChipSelect)
-:	m_pSPIMaster (pSPIMaster),
+				unsigned nChipSelect, boolean bSwapColorBytes)
+:	CDisplay (bSwapColorBytes ? RGB565_BE : RGB565),
+	m_pSPIMaster (pSPIMaster),
 	m_nResetPin (nResetPin),
 	m_nBackLightPin (nBackLightPin),
 	m_nWidth (nWidth),
@@ -96,8 +99,8 @@ CST7789Display::CST7789Display (CSPIMaster *pSPIMaster,
 	m_CPHA (CPHA),
 	m_nClockSpeed (nClockSpeed),
 	m_nChipSelect (nChipSelect),
-	m_DCPin (nDCPin, GPIOModeOutput),
-	m_pTimer (CTimer::Get ())
+	m_bSwapColorBytes (bSwapColorBytes),
+	m_DCPin (nDCPin, GPIOModeOutput)
 {
 	assert (nDCPin != None);
 
@@ -112,32 +115,41 @@ CST7789Display::CST7789Display (CSPIMaster *pSPIMaster,
 		m_ResetPin.AssignPin (m_nResetPin);
 		m_ResetPin.SetMode (GPIOModeOutput, FALSE);
 	}
+		
+	m_nRotation = 0;
+
+	m_pBuffer = new u16[m_nWidth * m_nHeight];
+	assert (m_pBuffer != 0);
+}
+
+CST7789Display::~CST7789Display (void)
+{
+	delete [] m_pBuffer;
 }
 
 boolean CST7789Display::Initialize (void)
 {
 	assert (m_pSPIMaster != 0);
-	assert (m_pTimer != 0);
 
 	if (m_nBackLightPin != None)
 	{
 		m_BackLightPin.Write (LOW);
-		m_pTimer->MsDelay (100);
+		CTimer::SimpleMsDelay (100);
 		m_BackLightPin.Write (HIGH);
 	}
 
 	if (m_nResetPin != None)
 	{
 		m_ResetPin.Write (HIGH);
-		m_pTimer->MsDelay (50);
+		CTimer::SimpleMsDelay (50);
 		m_ResetPin.Write (LOW);
-		m_pTimer->MsDelay (50);
+		CTimer::SimpleMsDelay (50);
 		m_ResetPin.Write (HIGH);
-		m_pTimer->MsDelay (50);
+		CTimer::SimpleMsDelay (50);
 	}
 
 	Command (ST7789_SWRESET);	// Software reset
-	m_pTimer->MsDelay (150);
+	CTimer::SimpleMsDelay (150);
 
 	Command (ST7789_MADCTL);
 	Data (0x70);
@@ -151,6 +163,10 @@ boolean CST7789Display::Initialize (void)
 
 	Command (ST7789_COLMOD);
 	Data (0x05);
+
+	Command (RAMCTRL);		// Set Endian Mode
+	Data (0x00);
+	Data (m_bSwapColorBytes ? 0xF0 : 0xF8);
 
 	Command (ST7789_GCTRL);
 	Data (0x14);
@@ -213,19 +229,25 @@ boolean CST7789Display::Initialize (void)
 
 	Command (ST7789_SLPOUT);
 
-	Clear ();
-
 	On ();
+
+	Clear ();
 
 	return TRUE;
 }
 
+void CST7789Display::SetRotation (unsigned nRot)
+{
+	if (nRot == 0 || nRot == 90 || nRot == 180 || nRot == 270)
+	{
+		m_nRotation = nRot;
+	}
+}
+
 void CST7789Display::On (void)
 {
-	assert (m_pTimer != 0);
-
 	Command (ST7789_DISPON);
-	m_pTimer->MsDelay (100);
+	CTimer::SimpleMsDelay (100);
 }
 
 void CST7789Display::Off (void)
@@ -252,40 +274,222 @@ void CST7789Display::Clear (TST7789Color Color)
 	}
 }
 
+unsigned CST7789Display::RotX (unsigned x, unsigned y)
+{
+	//   0 -> [x,y]
+	//  90 -> [y, MAX_Y-x]
+	// 180 -> [MAX_X-x, MAX_Y-y]
+	// 270 -> [MAX_X-y, x]
+	switch (m_nRotation)
+	{
+		case 90:
+			return y;
+			break;
+
+		case 180:
+			return m_nWidth - 1 - x;
+			break;
+
+		case 270:
+			return m_nWidth - 1 - y;
+			break;
+
+		default: // 0 or other
+			return x;
+			break;
+	}
+}
+
+unsigned CST7789Display::RotY (unsigned x, unsigned y)
+{
+	switch (m_nRotation)
+	{
+		case 90:
+			return m_nHeight - 1 - x;
+			break;
+
+		case 180:
+			return m_nHeight - 1 - y;
+			break;
+
+		case 270:
+			return x;
+			break;
+
+		default: // 0 or other
+			return y;
+			break;
+	}
+}
+
 void CST7789Display::SetPixel (unsigned nPosX, unsigned nPosY, TST7789Color Color)
 {
-	SetWindow (nPosX, nPosY, nPosX, nPosY);
+	unsigned xc = RotX(nPosX, nPosY);
+	unsigned yc = RotY(nPosX, nPosY);
+	SetWindow (xc, yc, xc, yc);
 
 	SendData (&Color, sizeof Color);
 }
 
 void CST7789Display::DrawText (unsigned nPosX, unsigned nPosY, const char *pString,
-			       TST7789Color Color, TST7789Color BgColor)
+			       TST7789Color Color, TST7789Color BgColor,
+			       bool bDoubleWidth, bool bDoubleHeight, const TFont &rFont)
 {
 	assert (pString != 0);
 
-	unsigned nCharWidth = m_CharGen.GetCharWidth () * 2;
-	unsigned nCharHeight = m_CharGen.GetCharHeight () * 2;
+	CCharGenerator CharGen (rFont, CCharGenerator::MakeFlags (bDoubleWidth, bDoubleHeight));
+	unsigned nCharWidth = CharGen.GetCharWidth ();
+	unsigned nCharHeight = CharGen.GetCharHeight ();
 
-	TST7789Color Buffer[nCharHeight][nCharWidth];
+	TST7789Color Buffer[nCharHeight * nCharWidth];
 
 	char chChar;
 	while ((chChar = *pString++) != '\0')
 	{
 		for (unsigned y = 0; y < nCharHeight; y++)
 		{
+			CCharGenerator::TPixelLine Line = CharGen.GetPixelLine (chChar, y);
+
 			for (unsigned x = 0; x < nCharWidth; x++)
 			{
-				Buffer[y][x] =   m_CharGen.GetPixel (chChar, x/2, y/2)
-					       ? Color : BgColor;
+				TST7789Color pix = CharGen.GetPixel (x, Line) ? Color : BgColor;
+
+				// Rotation determines order of bytes in the buffer
+				switch (m_nRotation)
+				{
+					case 90:
+						// (Last C - C)*rows + R
+						Buffer[(nCharWidth-1-x)*nCharHeight + y] = pix;
+						break;
+					case 180:
+						// (Last R - R)*cols + (Last C - C)
+						Buffer[(nCharHeight-1-y)*nCharWidth + (nCharWidth-1-x)] = pix;
+						break;
+					case 270:
+						// C*rows + (Last R - R)
+						Buffer[x*nCharHeight + nCharHeight - 1 - y] = pix;
+						break;
+					default:
+						// R*cols + C
+						Buffer[y*nCharWidth + x] = pix;
+						break;
+				}
 			}
 		}
-
-		SetWindow (nPosX, nPosY, nPosX+nCharWidth-1, nPosY+nCharHeight-1);
+		
+		// Need to set different corners of the window depending on
+		// the rotation to avoid have negative/inside out windows.
+		unsigned x1=nPosX;
+		unsigned x2=nPosX+nCharWidth-1;
+		unsigned y1=nPosY;
+		unsigned y2=nPosY+nCharHeight-1;
+		switch (m_nRotation)
+		{
+			case 90:
+				SetWindow (RotX(x2,y1), RotY(x2,y1), RotX(x1,y2), RotY(x1,y2));
+				break;
+			case 180:
+				SetWindow (RotX(x2,y2), RotY(x2,y2), RotX(x1,y1), RotY(x1,y1));
+				break;
+			case 270:
+				SetWindow (RotX(x1,y2), RotY(x1,y2), RotX(x2,y1), RotY(x2,y1));
+				break;
+			default:
+				SetWindow (x1, y1, x2, y2);
+				break;
+		}
 
 		SendData (Buffer, sizeof Buffer);
 
 		nPosX += nCharWidth;
+	}
+}
+
+void CST7789Display::SetPixel (unsigned nPosX, unsigned nPosY, TRawColor nColor)
+{
+	SetPixel (nPosX, nPosY, (TST7789Color) nColor);
+}
+
+void CST7789Display::SetArea (const TArea &rArea, const void *pPixels,
+			      TAreaCompletionRoutine *pRoutine, void *pParam)
+{
+	int nWidth = rArea.x2 - rArea.x1 + 1;
+	int nHeight = rArea.y2 - rArea.y1 + 1;
+
+	if (m_nRotation == 0)
+	{
+		SetWindow (rArea.x1, rArea.y1, rArea.x2, rArea.y2);
+	}
+	else
+	{
+		const u16 *pFrom = (const u16 *) pPixels;
+		u16 *pTo = m_pBuffer;
+
+		switch (m_nRotation)
+		{
+		case 90:
+			SetWindow (m_nWidth-rArea.y2-1, rArea.x1,
+				   m_nWidth-rArea.y1-1, rArea.x2);
+			for (int x = 0; x < nWidth; x++)
+			{
+				for (int y = nHeight-1; y >= 0; y--)
+				{
+					*pTo++ = pFrom[x + y * nWidth];
+				}
+			}
+			break;
+
+		case 180:
+			SetWindow (m_nWidth-rArea.x2-1, m_nHeight-rArea.y2-1,
+				   m_nWidth-rArea.x1-1, m_nHeight-rArea.y1-1);
+			for (int y = nHeight-1; y >= 0; y--)
+			{
+				for (int x = nWidth-1; x >= 0; x--)
+				{
+					*pTo++ = pFrom[x + y * nWidth];
+				}
+			}
+			break;
+
+		case 270:
+			SetWindow (rArea.y1, m_nHeight-rArea.x2-1,
+				   rArea.y2, m_nHeight-rArea.x1-1);
+			for (int x = nWidth-1; x >= 0; x--)
+			{
+				for (int y = 0; y < nHeight; y++)
+				{
+					*pTo++ = pFrom[x + y * nWidth];
+				}
+			}
+			break;
+
+		default:
+			assert (0);
+			break;
+		}
+
+		pPixels = m_pBuffer;
+	}
+
+	size_t ulSize = nWidth * nHeight * sizeof (u16);
+	while (ulSize)
+	{
+		// The BCM2835 SPI master has a transfer size limit.
+		// TODO: Request this parameter from the SPI master driver.
+		const size_t MaxTransferSize = 0xFFFC;
+
+		size_t ulBlockSize = ulSize >= MaxTransferSize ? MaxTransferSize : ulSize;
+
+		SendData (pPixels, ulBlockSize);
+
+		pPixels = (const void *) ((uintptr) pPixels + ulBlockSize);
+
+		ulSize -= ulBlockSize;
+	}
+
+	if (pRoutine)
+	{
+		(*pRoutine) (pParam);
 	}
 }
 

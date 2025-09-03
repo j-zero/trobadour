@@ -21,7 +21,7 @@
 //
 
 #ifndef _kernel_h
-#define _kernel_hUpdate
+#define _kernel_h
 
 #include <circle_stdlib_app.h>
 #include <circle/bcm54213.h>

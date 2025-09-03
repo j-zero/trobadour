@@ -2,7 +2,7 @@
 // dmachannel.h
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2022  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2024  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -71,17 +71,27 @@ public:
 
 	/// \brief Prepare an I/O read transfer
 	/// \param pDestination Pointer to the destination buffer
-	/// \param nIOAddress	I/O address to be read from (ARM-side or bus address)
+	/// \param ulIOAddress	I/O address to be read from (ARM-side or bus address)
 	/// \param nLength	Number of bytes to be transferred
 	/// \param DREQ		DREQ line for pacing the transfer (see dmacommon.h)
-	void SetupIORead (void *pDestination, u32 nIOAddress, size_t nLength, TDREQ DREQ);
+	void SetupIORead (void *pDestination, uintptr ulIOAddress, size_t nLength, TDREQ DREQ);
 
 	/// \brief Prepare an I/O write transfer
-	/// \param nIOAddress	I/O address to be written (ARM-side or bus address)
+	/// \param ulIOAddress	I/O address to be written (ARM-side or bus address)
 	/// \param pSource	Pointer to the source buffer
 	/// \param nLength	Number of bytes to be transferred
 	/// \param DREQ		DREQ line for pacing the transfer (see dmacommon.h)
-	void SetupIOWrite (u32 nIOAddress, const void *pSource, size_t nLength, TDREQ DREQ);
+	void SetupIOWrite (uintptr ulIOAddress, const void *pSource, size_t nLength, TDREQ DREQ);
+
+	/// \brief Prepare a cyclic I/O write transfer
+	/// \param ulIOAddress	I/O address to be written (ARM-side or bus address)
+	/// \param ppSources	Pointer to an array with the source buffer pointers
+	/// \param nBuffers	Number of source buffers
+	/// \param ulLength	Number of bytes to be transferred per buffer
+	/// \param DREQ		DREQ line for pacing the transfer (see dmacommon.h)
+	/// \note Transfer starts from first buffer again, when last buffer has been sent.
+	void SetupCyclicIOWrite (uintptr ulIOAddress, const void *ppSources[], unsigned nBuffers,
+				 size_t ulLength, TDREQ DREQ);
 
 	/// \brief Prepare a 2D memory copy transfer (copy a number of blocks with optional stride)
 	/// \param pDestination Pointer to the destination buffer
@@ -100,6 +110,7 @@ public:
 	/// \brief Set completion routine to be called, when the transfer is finished
 	/// \param pRoutine Pointer to the completion routine
 	/// \param pParam   User parameter
+	/// \note Must be called before starting every new asynchronous transfer.
 	void SetCompletionRoutine (TDMACompletionRoutine *pRoutine, void *pParam);
 
 	/// \brief Start the DMA transfer
@@ -107,12 +118,15 @@ public:
 
 	/// \brief Wait for the completion of the DMA transfer
 	/// \return Has the transfer been successful?
-	/// \note This is for synchronous calls without completion routine.
+	/// \note This is for synchronous calls without completion routine (non-cyclic only).
 	boolean Wait (void);
 
 	/// \brief Get status of the DMA transfer, to be called in the completion routine
 	/// \return Has the transfer been successful?
 	boolean GetStatus (void);
+
+	/// \brief Cancel running DMA transfer and wait for termination
+	void Cancel (void);
 
 private:
 	void InterruptHandler (void);
@@ -121,8 +135,13 @@ private:
 private:
 	unsigned m_nChannel;
 
-	u8 *m_pControlBlockBuffer;
-	TDMAControlBlock *m_pControlBlock;
+	static const int MaxCyclicBuffers = 4;
+	TDMAControlBlock *m_pControlBlock[MaxCyclicBuffers];
+
+	unsigned m_nBuffers;
+	volatile unsigned m_nCurrentBuffer;
+
+	const void *m_pBuffer[MaxCyclicBuffers];
 
 	CInterruptSystem *m_pInterruptSystem;
 	boolean m_bIRQConnected;

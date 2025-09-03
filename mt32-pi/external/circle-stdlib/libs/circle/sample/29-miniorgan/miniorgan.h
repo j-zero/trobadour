@@ -2,7 +2,7 @@
 // miniorgan.h
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2017-2022  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2017-2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
 #ifdef USE_I2S
 	#include <circle/sound/i2ssoundbasedevice.h>
 	#define SOUND_CLASS	CI2SSoundBaseDevice
-	#define SAMPLE_RATE	192000
-	#define CHUNK_SIZE	8192
+	#define SAMPLE_RATE	48000
+	#define CHUNK_SIZE	2048
 	#define DAC_I2C_ADDRESS	0		// I2C slave address of the DAC (0 for auto probing)
 #elif defined (USE_HDMI)
 	#include <circle/sound/hdmisoundbasedevice.h>
@@ -72,9 +72,8 @@ public:
 
 #ifdef USE_USB
 	unsigned GetChunk (s16 *pBuffer, unsigned nChunkSize);
-#else
-	unsigned GetChunk (u32 *pBuffer, unsigned nChunkSize);
 #endif
+	unsigned GetChunk (u32 *pBuffer, unsigned nChunkSize);
 
 private:
 	static void MIDIPacketHandler (unsigned nCable, u8 *pPacket, unsigned nLength);

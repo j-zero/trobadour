@@ -2,7 +2,7 @@
 // kernel.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2021  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2023  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +18,12 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 #include "kernel.h"
+#include <circle/usb/usbhcidevice.h>
+#include <circle/usb/gadget/usbmidigadget.h>
 #include <circle/machineinfo.h>
+#include <assert.h>
+
+//#define USB_GADGET_MODE
 
 static const char FromKernel[] = "kernel";
 
@@ -27,8 +32,12 @@ CKernel::CKernel (void)
 	m_Timer (&m_Interrupt),
 	m_Logger (m_Options.GetLogLevel (), &m_Timer),
 	m_I2CMaster (CMachineInfo::Get ()->GetDevice (DeviceI2CMaster), TRUE),
-	m_USBHCI (&m_Interrupt, &m_Timer, TRUE),		// TRUE: enable plug-and-play
-	m_MiniOrgan (&m_Interrupt, &m_I2CMaster)
+#ifndef USB_GADGET_MODE
+	m_pUSB (new CUSBHCIDevice (&m_Interrupt, &m_Timer, TRUE)), // TRUE: enable plug-and-play
+#else
+	m_pUSB (new CUSBMIDIGadget (&m_Interrupt)),
+#endif
+	m_pMiniOrgan (0)
 {
 	m_ActLED.Blink (5);	// show we are alive
 }
@@ -68,12 +77,15 @@ boolean CKernel::Initialize (void)
 
 	if (bOK)
 	{
-		bOK = m_USBHCI.Initialize ();
+		assert (m_pUSB);
+		bOK = m_pUSB->Initialize ();
 	}
 
 	if (bOK)
 	{
-		bOK = m_MiniOrgan.Initialize ();
+		m_pMiniOrgan = new CMiniOrgan (&m_Interrupt, &m_I2CMaster);
+
+		bOK = m_pMiniOrgan->Initialize ();
 	}
 
 	return bOK;
@@ -85,14 +97,15 @@ TShutdownMode CKernel::Run (void)
 	
 	m_Logger.Write (FromKernel, LogNotice, "Just play!");
 
-	m_MiniOrgan.Start ();
+	m_pMiniOrgan->Start ();
 
-	for (unsigned nCount = 0; m_MiniOrgan.IsActive (); nCount++)
+	for (unsigned nCount = 0; m_pMiniOrgan->IsActive (); nCount++)
 	{
 		// This must be called from TASK_LEVEL to update the tree of connected USB devices.
-		boolean bUpdated = m_USBHCI.UpdatePlugAndPlay ();
+		assert (m_pUSB);
+		boolean bUpdated = m_pUSB->UpdatePlugAndPlay ();
 
-		m_MiniOrgan.Process (bUpdated);
+		m_pMiniOrgan->Process (bUpdated);
 
 		m_Screen.Rotor (0, nCount);
 	}

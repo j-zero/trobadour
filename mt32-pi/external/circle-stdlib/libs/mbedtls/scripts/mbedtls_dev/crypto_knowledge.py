@@ -4,25 +4,14 @@ This module is entirely based on the PSA API.
 """
 
 # Copyright The Mbed TLS Contributors
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 #
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 import enum
 import re
-from typing import FrozenSet, Iterable, List, Optional, Tuple
+from typing import FrozenSet, Iterable, List, Optional, Tuple, Dict
 
-from mbedtls_dev.asymmetric_key_data import ASYMMETRIC_KEY_DATA
+from .asymmetric_key_data import ASYMMETRIC_KEY_DATA
 
 
 def short_expression(original: str, level: int = 0) -> str:
@@ -139,8 +128,8 @@ class KeyType:
         return self.name.endswith('_PUBLIC_KEY')
 
     ECC_KEY_SIZES = {
-        'PSA_ECC_FAMILY_SECP_K1': (192, 224, 256),
-        'PSA_ECC_FAMILY_SECP_R1': (225, 256, 384, 521),
+        'PSA_ECC_FAMILY_SECP_K1': (192, 225, 256),
+        'PSA_ECC_FAMILY_SECP_R1': (192, 224, 256, 384, 521),
         'PSA_ECC_FAMILY_SECP_R2': (160,),
         'PSA_ECC_FAMILY_SECT_K1': (163, 233, 239, 283, 409, 571),
         'PSA_ECC_FAMILY_SECT_R1': (163, 233, 283, 409, 571),
@@ -148,7 +137,7 @@ class KeyType:
         'PSA_ECC_FAMILY_BRAINPOOL_P_R1': (160, 192, 224, 256, 320, 384, 512),
         'PSA_ECC_FAMILY_MONTGOMERY': (255, 448),
         'PSA_ECC_FAMILY_TWISTED_EDWARDS': (255, 448),
-    }
+    } # type: Dict[str, Tuple[int, ...]]
     KEY_TYPE_SIZES = {
         'PSA_KEY_TYPE_AES': (128, 192, 256), # exhaustive
         'PSA_KEY_TYPE_ARC4': (8, 128, 2048), # extremes + sensible
@@ -160,7 +149,7 @@ class KeyType:
         'PSA_KEY_TYPE_HMAC': (128, 160, 224, 256, 384, 512), # standard size for each supported hash
         'PSA_KEY_TYPE_RAW_DATA': (8, 40, 128), # sample
         'PSA_KEY_TYPE_RSA_KEY_PAIR': (1024, 1536), # small sample
-    }
+    } # type: Dict[str, Tuple[int, ...]]
     def sizes_to_test(self) -> Tuple[int, ...]:
         """Return a tuple of key sizes to test.
 
@@ -212,9 +201,7 @@ class KeyType:
         This function does not currently handle key derivation or PAKE.
         """
         #pylint: disable=too-many-branches,too-many-return-statements
-        if alg.is_wildcard:
-            return False
-        if alg.is_invalid_truncation():
+        if not alg.is_valid_for_operation():
             return False
         if self.head == 'HMAC' and alg.head == 'HMAC':
             return True
@@ -494,6 +481,19 @@ class Algorithm:
             if to_length not in permitted_lengths:
                 return True
         return False
+
+    def is_valid_for_operation(self) -> bool:
+        """Whether this algorithm construction is valid for an operation.
+
+        This function assumes that the algorithm is constructed in a
+        "grammatically" correct way, and only rejects semantically invalid
+        combinations.
+        """
+        if self.is_wildcard:
+            return False
+        if self.is_invalid_truncation():
+            return False
+        return True
 
     def can_do(self, category: AlgorithmCategory) -> bool:
         """Whether this algorithm can perform operations in the given category.

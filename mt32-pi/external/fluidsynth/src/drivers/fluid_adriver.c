@@ -170,6 +170,16 @@ static const fluid_audriver_definition_t fluid_audio_drivers[] =
     },
 #endif
 
+#if KAI_SUPPORT
+    {
+        "kai",
+        new_fluid_kai_audio_driver,
+        NULL,
+        delete_fluid_kai_audio_driver,
+        fluid_kai_audio_driver_settings
+    },
+#endif
+
 #if DART_SUPPORT
     {
         "dart",
@@ -177,6 +187,16 @@ static const fluid_audriver_definition_t fluid_audio_drivers[] =
         NULL,
         delete_fluid_dart_audio_driver,
         fluid_dart_audio_driver_settings
+    },
+#endif
+
+#if SDL3_SUPPORT
+    {
+        "sdl3",
+        new_fluid_sdl3_audio_driver,
+        NULL,
+        delete_fluid_sdl3_audio_driver,
+        fluid_sdl3_audio_driver_settings
     },
 #endif
 
@@ -220,7 +240,7 @@ void fluid_audio_driver_settings(fluid_settings_t *settings)
     fluid_settings_add_option(settings, "audio.sample-format", "16bits");
     fluid_settings_add_option(settings, "audio.sample-format", "float");
 
-#if defined(WIN32)
+#if defined(_WIN32)
     fluid_settings_register_int(settings, "audio.period-size", 512, 64, 8192, 0);
     fluid_settings_register_int(settings, "audio.periods", 8, 2, 64, 0);
 #elif defined(MACOS9)

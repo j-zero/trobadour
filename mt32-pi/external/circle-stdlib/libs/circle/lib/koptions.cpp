@@ -2,7 +2,7 @@
 // koptions.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2022  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2023  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -33,11 +33,14 @@ CKernelOptions::CKernelOptions (void)
 	m_nUSBPowerDelay (0),
 	m_bUSBFullSpeed (FALSE),
 	m_bUSBBoost (FALSE),
+	m_USBSoundChannels {0, 0},
 	m_nSoundOption (0),
 	m_CPUSpeed (CPUSpeedLow),
 	m_nSoCMaxTemp (60),
 	m_nGPIOFanPin (0),
-	m_bTouchScreenValid (FALSE)
+	m_bTouchScreenValid (FALSE),
+	m_pAppOptionList (nullptr),
+        m_nBacklight (0)
 {
 	strcpy (m_LogDevice, "tty1");
 	strcpy (m_KeyMap, DEFAULT_KEYMAP);
@@ -128,6 +131,14 @@ CKernelOptions::CKernelOptions (void)
 			strncpy (m_USBIgnore, pValue, sizeof m_USBIgnore-1);
 			m_USBIgnore[sizeof m_USBIgnore-1] = '\0';
 		}
+		else if (strcmp (pOption, "usbsoundchannels") == 0)
+		{
+			if (!GetDecimals (pValue, m_USBSoundChannels, 2))
+			{
+				m_USBSoundChannels[0] = 0;
+				m_USBSoundChannels[1] = 0;
+			}
+		}
 		else if (strcmp (pOption, "sounddev") == 0)
 		{
 			strncpy (m_SoundDevice, pValue, sizeof m_SoundDevice-1);
@@ -137,7 +148,7 @@ CKernelOptions::CKernelOptions (void)
 		{
 			unsigned nValue;
 			if (   (nValue = GetDecimal (pValue)) != INVALID_VALUE
-			    && nValue <= 2)
+			    && (nValue <= 2 || nValue == 16 || nValue == 24))
 			{
 				m_nSoundOption = nValue;
 			}
@@ -162,7 +173,7 @@ CKernelOptions::CKernelOptions (void)
 		{
 			unsigned nValue;
 			if (   (nValue = GetDecimal (pValue)) != INVALID_VALUE
-			    && 2 <= nValue && nValue <= 27)
+			    && 2 <= nValue && nValue <= 53)
 			{
 				m_nGPIOFanPin = nValue;
 			}
@@ -171,11 +182,43 @@ CKernelOptions::CKernelOptions (void)
 		{
 			m_bTouchScreenValid = GetDecimals (pValue, m_TouchScreen, 4);
 		}
+		else if (strcmp (pOption, "backlight") == 0)
+		{
+			unsigned nValue;
+			if (   (nValue = GetDecimal (pValue)) != INVALID_VALUE
+			    && 1 <= nValue && nValue <= 255)
+			{
+				m_nBacklight = nValue;
+			}
+		}
+		else
+		{
+			TAppOption *pAppOption = new TAppOption;
+
+			pAppOption->pName = new char[strlen (pOption)+1];
+			strcpy (pAppOption->pName, pOption);
+
+			pAppOption->pValue = new char[strlen (pValue)+1];
+			strcpy (pAppOption->pValue, pValue);
+
+			pAppOption->pNext = m_pAppOptionList;
+			m_pAppOptionList = pAppOption;
+		}
 	}
 }
 
 CKernelOptions::~CKernelOptions (void)
 {
+	while (m_pAppOptionList)
+	{
+		TAppOption *pAppOption = m_pAppOptionList;
+		m_pAppOptionList = pAppOption->pNext;
+
+		delete [] pAppOption->pValue;
+		delete [] pAppOption->pName;
+		delete pAppOption;
+	}
+
 	s_pThis = 0;
 }
 
@@ -224,6 +267,11 @@ const char *CKernelOptions::GetUSBIgnore (void) const
 	return m_USBIgnore;
 }
 
+const unsigned *CKernelOptions::GetUSBSoundChannels (void) const
+{
+	return m_USBSoundChannels;
+}
+
 const char *CKernelOptions::GetSoundDevice (void) const
 {
 	return m_SoundDevice;
@@ -252,6 +300,41 @@ unsigned CKernelOptions::GetGPIOFanPin (void) const
 const unsigned *CKernelOptions::GetTouchScreen (void) const
 {
 	return m_bTouchScreenValid ? m_TouchScreen : nullptr;
+}
+
+unsigned CKernelOptions::GetBacklight (void) const
+{
+	return m_nBacklight;
+}
+
+const char *CKernelOptions::GetAppOptionString (const char *pOption, const char *pDefault) const
+{
+	for (TAppOption *pAppOption = m_pAppOptionList; pAppOption; pAppOption = pAppOption->pNext)
+	{
+		if (strcmp (pAppOption->pName, pOption) == 0)
+		{
+			return pAppOption->pValue;
+		}
+	}
+
+	return pDefault;
+}
+
+unsigned CKernelOptions::GetAppOptionDecimal (const char *pOption, unsigned nDefault) const
+{
+	const char *pValue = GetAppOptionString (pOption, nullptr);
+	if (!pValue)
+	{
+		return nDefault;
+	}
+
+	unsigned nValue = GetDecimal (pValue);
+	if (nValue == INVALID_VALUE)
+	{
+		return nDefault;
+	}
+
+	return nValue;
 }
 
 CKernelOptions *CKernelOptions::Get (void)
@@ -315,7 +398,7 @@ char *CKernelOptions::GetOptionValue (char *pOption)
 	return pOption;
 }
 
-unsigned CKernelOptions::GetDecimal (char *pString)
+unsigned CKernelOptions::GetDecimal (const char *pString)
 {
 	if (   pString == 0
 	    || *pString == '\0')

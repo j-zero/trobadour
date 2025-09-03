@@ -72,10 +72,12 @@ Providing RPi 3A+ hardware
 Helping to fix several USB issues
 Testing HDMI sound support and 4K monitors
 Modifications for Raspberry Pi Zero 2 W
+Testing and tracing USB Audio streaming with Dirtywave M8
 
 Brad Robinson
 Improving scheduler library
 Improving bootloader support and tools
+Improving different parts of the base library
 
 D. Rimron
 Adding screen reverse mode
@@ -85,6 +87,8 @@ Adding screen ANSI colors
 Providing info patch for I2S input
 Providing patch for WLAN AP mode
 Adding SMI master driver and WS2812OverSMI addon
+USB CDC ACM (serial) gadget driver
+IRQ-driven I2C master
 
 Maciej Sokolowski
 Adding WM8960 support to I2S sound driver
@@ -92,3 +96,36 @@ Adding WM8960 support to I2S sound driver
 @diyelectromusic
 Adding I2C support to HD44780 display driver
 Adding support for SSD1306 OLED display
+Adding character mode support for ST7789 display
+
+@nickverlinden
+Testing several USB Audio Pro streaming interfaces
+
+Kevin Boone
+Adding support for Ctrl+navigation keys
+
+@ArnoldUK
+Testing the resizing of the screen in different classes
+
+@aniplay62
+Providing U-Boot driver for MACB / GEM Ethernet NIC for Raspberry Pi 5
+Helping to get WLAN working on Raspberry Pi 5
+
+Joe Strout
+Providing Dvorak keyboard layout
+
+Mike Messinides
+USB Mass Storage gadget driver
+
+Joshua Norrid
+Adding block cursor support to CScreenDevice
+
+@SteveSpencer
+Adding backlight cmdline.txt option
+Adding RTL8153 NIC support
+Extending class CString
+
+Pete Moore
+Adding configure support for macOS
+Adding cFlashy support for macOS
+Optimizing memset() for AArch64

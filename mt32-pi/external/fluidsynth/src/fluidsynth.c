@@ -20,7 +20,7 @@
 
 #include "fluid_sys.h"
 
-#if !defined(WIN32) && !defined(MACINTOSH)
+#if !defined(_WIN32) && !defined(MACINTOSH)
 #define _GNU_SOURCE
 #endif
 
@@ -29,17 +29,18 @@
 #define GETOPT_SUPPORT 1
 #endif
 
-#ifdef LIBINSTPATCH_SUPPORT
-#include <libinstpatch/libinstpatch.h>
-#endif
-#include "fluid_lash.h"
-
 #ifdef SYSTEMD_SUPPORT
 #include <systemd/sd-daemon.h>
 #endif
 
+#if SDL3_SUPPORT
+#include <SDL3/SDL.h>
+#define SDL_OK 1
+#endif
+
 #if SDL2_SUPPORT
 #include <SDL.h>
+#define SDL_OK 0
 #endif
 
 #if PIPEWIRE_SUPPORT
@@ -125,16 +126,16 @@ int process_o_cmd_line_option(fluid_settings_t *settings, char *optarg)
         }
 
         break;
-
-    case FLUID_STR_TYPE:
-        if(fluid_settings_setstr(settings, optarg, val) != FLUID_OK)
+        
+    case FLUID_STR_TYPE: {
+        char *u8_val = val;
+        if(fluid_settings_setstr(settings, optarg, u8_val) != FLUID_OK)
         {
             fprintf(stderr, "Failed to set string parameter '%s'\n", optarg);
             return FLUID_FAILED;
         }
-
         break;
-
+    }
     default:
         fprintf(stderr, "Setting parameter '%s' not found\n", optarg);
         return FLUID_FAILED;
@@ -159,45 +160,6 @@ print_pretty_int(int i)
         printf("%d", i);
     }
 }
-
-#ifdef WIN32
-/* Function using win32 api to convert ANSI encoding string to UTF8 encoding string */
-static char*
-win32_ansi_to_utf8(const char* ansi_null_terminated_string)
-{
-    LPWSTR u16_buf = NULL;
-    char *u8_buf = NULL;
-    fluid_return_val_if_fail(ansi_null_terminated_string != NULL, NULL);
-    do
-    {
-        int u16_count, u8_byte_count;
-        u16_count = MultiByteToWideChar(CP_ACP, 0, ansi_null_terminated_string, -1, NULL, 0);
-        if (u16_count == 0)
-        {
-            fprintf(stderr, "Failed to convert ANSI string to wide char string\n");
-            break;
-        }
-        u16_buf = malloc(u16_count * sizeof(WCHAR));
-        if (u16_buf == NULL)
-        {
-            fprintf(stderr, "Out of memory\n");
-            break;
-        }
-        u16_count = MultiByteToWideChar(CP_ACP, 0, ansi_null_terminated_string, -1, u16_buf, u16_count);
-        u8_byte_count = WideCharToMultiByte(CP_UTF8, 0, u16_buf, u16_count, NULL, 0, NULL, NULL);
-
-        u8_buf = malloc(u8_byte_count);
-        if (u8_buf == NULL)
-        {
-            fprintf(stderr, "Out of memory\n");
-            break;
-        }
-        WideCharToMultiByte(CP_UTF8, 0, u16_buf, u16_count, u8_buf, u8_byte_count, NULL, NULL);
-    } while (0);
-    free(u16_buf);
-    return u8_buf;
-}
-#endif
 
 typedef struct
 {
@@ -369,9 +331,13 @@ fast_render_loop(fluid_settings_t *settings, fluid_synth_t *synth, fluid_player_
     15)create the audio driver (i.e synthesis thread) and a synchronous user
        shell if interactive.
  */
+#if defined(_WIN32) && defined(_UNICODE)
+int wmain(int argc, wchar_t **wargv)
+#else
 int main(int argc, char **argv)
+#endif
 {
-    fluid_settings_t *settings;
+    fluid_settings_t *settings = NULL;
     int result = -1;
     int arg1 = 1;
     char buf[512];
@@ -395,24 +361,64 @@ int main(int argc, char **argv)
     int dump = 0;
     int fast_render = 0;
     static const char optchars[] = "a:C:c:dE:f:F:G:g:hijK:L:lm:nO:o:p:QqR:r:sT:Vvz:";
-#ifdef HAVE_LASH
-    int connect_lash = 1;
-    int enabled_lash = 0;		/* set to TRUE if lash gets enabled */
-    fluid_lash_args_t *lash_args;
 
-    lash_args = fluid_lash_extract_args(&argc, &argv);
+#if defined(_WIN32) && defined(_UNICODE)
+// WC_ERR_INVALID_CHARS is only supported on Windows Vista and newer. To support older Windows, our only chance is to use zero for this flag.
+#ifndef WC_ERR_INVALID_CHARS
+#define WC_ERR_INVALID_CHARS 0
 #endif
-
-#if SDL2_SUPPORT
-    // Tell SDL that it shouldn't intercept signals, otherwise SIGINT and SIGTERM won't quit fluidsynth
-    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
-    if(SDL_Init(SDL_INIT_AUDIO) != 0)
+    char **argv = NULL;
+    // console output will be utf-8
+    SetConsoleOutputCP(CP_UTF8);
+    // console input, too
+    SetConsoleCP(CP_UTF8);
+    // conversion of wchar_t (UTF-16) arguments to char (UTF-8)
+    if ((argv = (char **) calloc( argc, sizeof(char *) )) == NULL)
     {
-        fprintf(stderr, "Warning: Unable to initialize SDL2 Audio: %s", SDL_GetError());
+        fprintf(stderr, "Out of memory\n");
+        goto cleanup;
     }
     else
     {
-        atexit(SDL_Quit);
+        for (i = 0; i < argc; ++i)
+        {
+            int u8_count = 0;
+            if (1 > (u8_count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wargv[i], -1, NULL, 0, NULL, NULL)))
+            {
+                fprintf(stderr, "Failed to convert wide char string to UTF8\n");
+                goto cleanup;
+            }
+            else if ((argv[i] = (char *) calloc(u8_count, sizeof(char))) == NULL)
+            {
+                fprintf(stderr, "Out of memory\n");
+                goto cleanup;
+            }
+            else if (u8_count != WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wargv[i], -1, argv[i], u8_count, NULL, NULL))
+            {
+                fprintf(stderr, "Failed to convert wide char string to UTF8\n");
+                goto cleanup;
+            }
+        }
+    }
+#endif
+
+#if SDL2_SUPPORT || SDL3_SUPPORT
+    // Tell SDL that it shouldn't intercept signals, otherwise SIGINT and SIGTERM won't quit fluidsynth
+    i = SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+    if(i != SDL_OK)
+    {
+        fprintf(stderr, "Warning: Unable disable SDL3 signal handlers: %s\n", SDL_GetError());
+    }
+    if(SDL_Init(SDL_INIT_AUDIO) != SDL_OK)
+    {
+        fprintf(stderr, "Warning: Unable to initialize SDL3 Audio: %s\n", SDL_GetError());
+    }
+    else
+    {
+        if(atexit(SDL_Quit))
+        {
+            fprintf(stderr, "Warning: Unable register SDL_Quit exit handler");
+        }
     }
 #endif
 
@@ -501,7 +507,7 @@ int main(int argc, char **argv)
             {
                 optarg = argv[i];
 
-                if(optarg[0] == '-')
+                if((optarg[0] == '-') && ((optarg[1] != '\0') || (c != 'F')))
                 {
                     printf("Expected argument to option -%c found switch instead\n", c);
                     print_usage();
@@ -656,9 +662,7 @@ int main(int argc, char **argv)
             break;
 
         case 'l':			/* disable LASH */
-#ifdef HAVE_LASH
-            connect_lash = 0;
-#endif
+            // lash support removed in 2.4.0, NOOP
             break;
 
         case 'm':
@@ -734,7 +738,7 @@ int main(int argc, char **argv)
         case 'q':
             quiet = 1;
 
-#if defined(WIN32)
+#if defined(_WIN32)
             /* Windows logs to stdout by default, so make sure anything
              * lower than PANIC is not printed either */
             fluid_set_log_function(FLUID_ERR, NULL, NULL);
@@ -852,19 +856,8 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-#ifdef WIN32
+#ifdef _WIN32
     SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
-#endif
-
-#ifdef HAVE_LASH
-
-    /* connect to the lash server */
-    if(connect_lash)
-    {
-        enabled_lash = fluid_lash_connect(lash_args);
-        fluid_settings_setint(settings, "lash.enable", enabled_lash ? 1 : 0);
-    }
-
 #endif
 
     /* The 'groups' setting is relevant for LADSPA operation and channel mapping
@@ -945,16 +938,6 @@ int main(int argc, char **argv)
     for(i = arg1; i < argc; i++)
     {
         const char *u8_path = argv[i];
-#if defined(WIN32)
-        /* try to convert ANSI encoding path to UTF8 encoding path */
-        char *u8_buf = win32_ansi_to_utf8(argv[i]);
-        if (u8_buf == NULL)
-        {
-            // error msg. already printed
-            goto cleanup;
-        }
-        u8_path = u8_buf;
-#endif
         if(fluid_is_midifile(u8_path))
         {
             continue;
@@ -971,9 +954,6 @@ int main(int argc, char **argv)
         {
             fprintf(stderr, "Parameter '%s' not a SoundFont or MIDI file or error occurred identifying it.\n", argv[i]);
         }
-#if defined(WIN32)
-        free(u8_buf);
-#endif
     }
 
     /* Try to load the default soundfont, if no soundfont specified */
@@ -1028,7 +1008,8 @@ int main(int argc, char **argv)
     /* create the player and add any midi files, if requested */
     for(i = arg1; i < argc; i++)
     {
-        if((argv[i][0] != '-') && fluid_is_midifile(argv[i]))
+        const char *u8_path = argv[i];
+        if((u8_path[0] != '-') && fluid_is_midifile(u8_path))
         {
             if(player == NULL)
             {
@@ -1047,7 +1028,7 @@ int main(int argc, char **argv)
                 }
             }
 
-            fluid_player_add(player, argv[i]);
+            fluid_player_add(player, u8_path);
         }
     }
 
@@ -1096,15 +1077,6 @@ int main(int argc, char **argv)
         }
 
 #endif
-    }
-
-#endif
-
-#ifdef HAVE_LASH
-
-    if(enabled_lash)
-    {
-        fluid_lash_create_thread(synth);
     }
 
 #endif
@@ -1178,6 +1150,10 @@ cleanup:
 #endif
         delete_fluid_server(server);
     }
+    else if(with_server)
+    {
+        result = 1;
+    }
 
 #endif	/* NETWORK_SUPPORT */
 
@@ -1205,6 +1181,17 @@ cleanup:
     delete_fluid_synth(synth);
     delete_fluid_settings(settings);
 
+#if defined(_WIN32) && defined(_UNICODE)
+    if (argv != NULL)
+    {
+        for (i = 0; i < argc; ++i)
+        {
+            free(argv[i]);
+        }
+        free(argv);
+    }
+#endif
+
     return result;
 }
 
@@ -1212,23 +1199,23 @@ cleanup:
  * print_usage
  */
 void
-print_usage()
+print_usage(void)
 {
     fprintf(stderr, "Usage: fluidsynth [options] [soundfonts]\n");
     fprintf(stderr, "Try -h for help.\n");
 }
 
 void
-print_welcome()
+print_welcome(void)
 {
     printf("FluidSynth runtime version %s\n"
-           "Copyright (C) 2000-2022 Peter Hanappe and others.\n"
+           "Copyright (C) 2000-2025 Peter Hanappe and others.\n"
            "Distributed under the LGPL license.\n"
            "SoundFont(R) is a registered trademark of Creative Technology Ltd.\n\n",
            fluid_version_str());
 }
 
-void print_configure()
+void print_configure(void)
 {
     puts("FluidSynth executable version " FLUIDSYNTH_VERSION);
     puts("Sample type="
@@ -1248,6 +1235,8 @@ print_help(fluid_settings_t *settings)
 {
     char *audio_options;
     char *midi_options;
+    double ddef;
+    int idef;
 
     audio_options = fluid_settings_option_concat(settings, "audio.driver", NULL);
     midi_options = fluid_settings_option_concat(settings, "midi.driver", NULL);
@@ -1275,8 +1264,9 @@ print_help(fluid_settings_t *settings)
            "    Load command configuration file (shell commands)\n");
     printf(" -F, --fast-render=[file]\n"
            "    Render MIDI file to raw audio data and store in [file]\n");
+    fluid_settings_getnum_default(settings, "synth.gain", &ddef);
     printf(" -g, --gain\n"
-           "    Set the master gain [0 < gain < 10, default = 0.2]\n");
+           "    Set the master gain [0 < gain < 10, default = def=%0.3g]\n", ddef);
     printf(" -G, --audio-groups\n"
            "    Defines the number of LADSPA audio nodes\n");
     printf(" -h, --help\n"
@@ -1285,14 +1275,14 @@ print_help(fluid_settings_t *settings)
            "    Don't read commands from the shell [default = yes]\n");
     printf(" -j, --connect-jack-outputs\n"
            "    Attempt to connect the jack outputs to the physical ports\n");
+
+    fluid_settings_getint_default(settings, "synth.midi-channels", &idef);
     printf(" -K, --midi-channels=[num]\n"
-           "    The number of midi channels [default = 16]\n");
-#ifdef HAVE_LASH
-    printf(" -l, --disable-lash\n"
-           "    Don't connect to LASH server\n");
-#endif
+           "    The number of midi channels [default = %d]\n", idef);
+
+    fluid_settings_getint_default(settings, "synth.audio-channels", &idef);
     printf(" -L, --audio-channels=[num]\n"
-           "    The number of stereo audio channels [default = 1]\n");
+           "    The number of stereo audio channels [default = %d]\n", idef);
     printf(" -m, --midi-driver=[label]\n"
            "    The name of the midi driver to use.\n"
            "    Valid values: %s\n", midi_options ? midi_options : "ERROR");
@@ -1310,7 +1300,7 @@ print_help(fluid_settings_t *settings)
 #endif
     printf(" -q, --quiet\n"
            "    Do not print welcome message or other informational output\n"
-           "    (Windows only: also suppress all log messages lower than PANIC\n");
+           "    (Windows only: also suppress all log messages lower than PANIC)\n");
     printf(" -r, --sample-rate\n"
            "    Set the sample rate\n");
     printf(" -R, --reverb\n"

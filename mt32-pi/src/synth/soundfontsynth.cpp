@@ -20,8 +20,6 @@
 // mt32-pi. If not, see <http://www.gnu.org/licenses/>.
 //
 
-
-
 #include <fatfs/ff.h>
 #include <circle/logger.h>
 #include <circle/timer.h>
@@ -137,7 +135,7 @@ CSoundFontSynth::CSoundFontSynth(unsigned nSampleRate)
 	  m_pSettings(nullptr),
 	  m_pSynth(nullptr),
 
-	  m_nVolume(25),
+	  m_nVolume(100),
 	  m_nInitialGain(0.2f),
 
 	  m_nPercussionMask(1 << 9),
@@ -202,9 +200,6 @@ bool CSoundFontSynth::Initialize()
 	fluid_settings_setnum(m_pSettings, "synth.sample-rate", static_cast<double>(m_nSampleRate));
 	fluid_settings_setint(m_pSettings, "synth.threadsafe-api", false);
 
-	ReportStatus();
-
-
 	return Reinitialize(pSoundFontPath, &FXProfile);
 }
 
@@ -214,8 +209,6 @@ void CSoundFontSynth::HandleMIDIShortMessage(u32 nMessage)
 	const u8 nChannel = nMessage & 0x0F;
 	const u8 nData1   = (nMessage >> 8) & 0xFF;
 	const u8 nData2   = (nMessage >> 16) & 0xFF;
-
-	m_nCurrentChannel = nChannel;
 
 	// Handle system real-time messages
 	if (nStatus == 0xFF)
@@ -248,30 +241,7 @@ void CSoundFontSynth::HandleMIDIShortMessage(u32 nMessage)
 
 		// Control change
 		case 0xB0:
-			if(nData1 == 71){
-				CHANNEL_PROG[nChannel] = nData2;
-				fluid_synth_bank_select(m_pSynth,nChannel, CHANNEL_BANK[nChannel]);
-				fluid_synth_program_change(m_pSynth, nChannel, CHANNEL_PROG[nChannel]); // AKAI MPK miniplay Hack // PC
-				//fluid_synth_program_select(m_pSynth,nChannel,m_nCurrentSoundFontIndex,CHANNEL_BANK[nChannel],nData2);
-			}
-			else if(nData1 == 70){
-				CHANNEL_BANK[nChannel] = nData2;
-				fluid_synth_bank_select(m_pSynth,nChannel, CHANNEL_BANK[m_nCurrentChannel]);
-				fluid_synth_program_change(m_pSynth, nChannel, CHANNEL_PROG[nChannel]); // AKAI MPK miniplay Hack // PC
-			}
-			else if(nData1 == 72){
-				m_nCurrentChannel = 9;
-				CHANNEL_PROG[m_nCurrentChannel] = nData2;
-				//fluid_synth_bank_select(m_pSynth,m_nCurrentChannel, CHANNEL_BANK[m_nCurrentChannel]);
-				fluid_synth_program_change(m_pSynth, m_nCurrentChannel, CHANNEL_PROG[m_nCurrentChannel]); // AKAI MPK miniplay Hack // PC
-
-			}
-			else if(nData1 == 73)
-				fluid_synth_cc(m_pSynth, nChannel, 7, nData2); // AKAI MPK miniplay Hack Volume
-			//else if(nData1 == 73)
-			//	fluid_synth_set_gain(m_pSynth, (nData2 / 127.0f) * 10.0f);
-			else
-				fluid_synth_cc(m_pSynth, nChannel, nData1, nData2);
+			fluid_synth_cc(m_pSynth, nChannel, nData1, nData2);
 			break;
 
 		// Program change
@@ -359,22 +329,10 @@ void CSoundFontSynth::ReportStatus() const
 
 void CSoundFontSynth::UpdateLCD(CLCD& LCD, unsigned int nTicks)
 {
-	int sfont_id = 0;
-	int bank_num = 0;
-	int preset_num = 0;
-
-	fluid_preset_t* presetIndex = fluid_synth_get_channel_preset(m_pSynth,m_nCurrentChannel);
-	const char* presetName = fluid_preset_get_name (presetIndex) ;
-
-	fluid_synth_get_program (m_pSynth, m_nCurrentChannel, &sfont_id, &bank_num, &preset_num);
-
-	//const u8 nBarHeight = LCD.Height();
-	const u8 nBarHeight = 32;
-	float ChannelLevels[CHANNELS], PeakLevels[CHANNELS];
+	const u8 nBarHeight = LCD.Height();
+	float ChannelLevels[16], PeakLevels[16];
 	m_MIDIMonitor.GetChannelLevels(nTicks, ChannelLevels, PeakLevels, m_nPercussionMask);
-	CUserInterface::DrawChannelLevels(LCD, nBarHeight, ChannelLevels, PeakLevels, CHANNELS, true);
-	CUserInterface::DrawHeader(LCD, m_nVolume, presetName, m_nCurrentChannel, bank_num, preset_num);
-	
+	CUserInterface::DrawChannelLevels(LCD, nBarHeight, ChannelLevels, PeakLevels, 16, true);
 }
 
 bool CSoundFontSynth::SwitchSoundFont(size_t nIndex)

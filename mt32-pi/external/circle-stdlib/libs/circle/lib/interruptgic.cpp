@@ -4,7 +4,7 @@
 // Driver for the GIC-400 interrupt controller of the Raspberry Pi 4
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2019-2021  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2019-2023  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,6 +26,8 @@
 #include <circle/memio.h>
 #include <circle/logger.h>
 #include <circle/sysconfig.h>
+#include <circle/southbridge.h>
+#include <circle/rp1int.h>
 #include <circle/types.h>
 #include <assert.h>
 
@@ -88,17 +90,31 @@ CInterruptSystem *CInterruptSystem::s_pThis = 0;
 
 CInterruptSystem::CInterruptSystem (void)
 {
+	if (s_pThis != 0)
+	{
+		return;
+	}
+	s_pThis = this;
+
 	for (unsigned nIRQ = 0; nIRQ < IRQ_LINES; nIRQ++)
 	{
 		m_apIRQHandler[nIRQ] = 0;
 		m_pParam[nIRQ] = 0;
 	}
-
-	s_pThis = this;
 }
 
 CInterruptSystem::~CInterruptSystem (void)
 {
+	Destructor ();
+}
+
+void CInterruptSystem::Destructor (void)
+{
+	if (s_pThis != this)
+	{
+		return;
+	}
+
 	DisableIRQs ();
 
 	write32 (GICD_CTLR, GICD_CTLR_DISABLE);
@@ -108,8 +124,13 @@ CInterruptSystem::~CInterruptSystem (void)
 
 boolean CInterruptSystem::Initialize (void)
 {
+	if (s_pThis != this)
+	{
+		return TRUE;
+	}
+
 #if AARCH == 32
-	TExceptionTable *pTable = (TExceptionTable *) ARM_EXCEPTION_TABLE_BASE;
+	TExceptionTable * volatile pTable = (TExceptionTable * volatile) ARM_EXCEPTION_TABLE_BASE;
 	pTable->IRQ = ARM_OPCODE_BRANCH (ARM_DISTANCE (pTable->IRQ, IRQStub));
 	pTable->FIQ = ARM_OPCODE_BRANCH (ARM_DISTANCE (pTable->FIQ, FIQStub));
 
@@ -118,7 +139,7 @@ boolean CInterruptSystem::Initialize (void)
 
 	SyncDataAndInstructionCache ();
 #else
-	TVectorTable *pTable = (TVectorTable *) VECTOR_TABLE_EL3;
+	TVectorTable * volatile pTable = (TVectorTable * volatile) VECTOR_TABLE_EL3;
 	for (unsigned i = 0; i < 16; i++)
 	{
 		pTable->Vector[i].Branch =
@@ -175,6 +196,25 @@ boolean CInterruptSystem::Initialize (void)
 
 void CInterruptSystem::ConnectIRQ (unsigned nIRQ, TIRQHandler *pHandler, void *pParam)
 {
+	if (s_pThis != this)
+	{
+		s_pThis->ConnectIRQ (nIRQ, pHandler, pParam);
+
+		return;
+	}
+
+#if RASPPI >= 5
+	if (nIRQ & IRQ_FROM_RP1__MASK)
+	{
+		assert (CSouthbridge::IsInitialized ());
+		CSouthbridge::Get ()->ConnectIRQ (nIRQ, pHandler, pParam);
+
+		return;
+	}
+
+	assert (!(nIRQ & IRQ_EDGE_TRIG__MASK));
+#endif
+
 	assert (nIRQ < IRQ_LINES);
 	assert (m_apIRQHandler[nIRQ] == 0);
 
@@ -186,6 +226,25 @@ void CInterruptSystem::ConnectIRQ (unsigned nIRQ, TIRQHandler *pHandler, void *p
 
 void CInterruptSystem::DisconnectIRQ (unsigned nIRQ)
 {
+	if (s_pThis != this)
+	{
+		s_pThis->DisconnectIRQ (nIRQ);
+
+		return;
+	}
+
+#if RASPPI >= 5
+	if (nIRQ & IRQ_FROM_RP1__MASK)
+	{
+		assert (CSouthbridge::IsInitialized ());
+		CSouthbridge::Get ()->DisconnectIRQ (nIRQ);
+
+		return;
+	}
+
+	assert (!(nIRQ & IRQ_EDGE_TRIG__MASK));
+#endif
+
 	assert (nIRQ < IRQ_LINES);
 	assert (m_apIRQHandler[nIRQ] != 0);
 
@@ -197,6 +256,13 @@ void CInterruptSystem::DisconnectIRQ (unsigned nIRQ)
 
 void CInterruptSystem::ConnectFIQ (unsigned nFIQ, TFIQHandler *pHandler, void *pParam)
 {
+	if (s_pThis != this)
+	{
+		s_pThis->ConnectFIQ (nFIQ, pHandler, pParam);
+
+		return;
+	}
+
 	assert (nFIQ <= ARM_MAX_FIQ);
 	assert (pHandler != 0);
 	assert (FIQData.pHandler == 0);
@@ -209,6 +275,13 @@ void CInterruptSystem::ConnectFIQ (unsigned nFIQ, TFIQHandler *pHandler, void *p
 
 void CInterruptSystem::DisconnectFIQ (void)
 {
+	if (s_pThis != this)
+	{
+		s_pThis->DisconnectFIQ ();
+
+		return;
+	}
+
 	assert (FIQData.pHandler != 0);
 
 	DisableFIQ ();
@@ -219,6 +292,18 @@ void CInterruptSystem::DisconnectFIQ (void)
 
 void CInterruptSystem::EnableIRQ (unsigned nIRQ)
 {
+#if RASPPI >= 5
+	if (nIRQ & IRQ_FROM_RP1__MASK)
+	{
+		assert (CSouthbridge::IsInitialized ());
+		CSouthbridge::Get ()->EnableIRQ (nIRQ);
+
+		return;
+	}
+
+	assert (!(nIRQ & IRQ_EDGE_TRIG__MASK));
+#endif
+
 	assert (nIRQ < IRQ_LINES);
 
 	write32 (GICD_ISENABLER0 + 4 * (nIRQ / 32), 1 << (nIRQ % 32));
@@ -226,6 +311,18 @@ void CInterruptSystem::EnableIRQ (unsigned nIRQ)
 
 void CInterruptSystem::DisableIRQ (unsigned nIRQ)
 {
+#if RASPPI >= 5
+	if (nIRQ & IRQ_FROM_RP1__MASK)
+	{
+		assert (CSouthbridge::IsInitialized ());
+		CSouthbridge::Get ()->DisableIRQ (nIRQ);
+
+		return;
+	}
+
+	assert (!(nIRQ & IRQ_EDGE_TRIG__MASK));
+#endif
+
 	assert (nIRQ < IRQ_LINES);
 
 	write32 (GICD_ICENABLER0 + 4 * (nIRQ / 32), 1 << (nIRQ % 32));
@@ -234,7 +331,7 @@ void CInterruptSystem::DisableIRQ (unsigned nIRQ)
 void CInterruptSystem::EnableFIQ (unsigned nFIQ)
 {
 #if AARCH == 64
-	u32 *pMagic = (u32 *) ARMSTUB_FIQ_MAGIC_ADDR;
+	u32 * volatile pMagic = (u32 * volatile) ARMSTUB_FIQ_MAGIC_ADDR;
 	if (*pMagic != ARMSTUB_FIQ_MAGIC)
 	{
 		CLogger::Get ()->Write ("intgic", LogPanic, "FIQ not supported, ARM stub not found");
@@ -251,7 +348,7 @@ void CInterruptSystem::EnableFIQ (unsigned nFIQ)
 void CInterruptSystem::DisableFIQ (void)	// may be called, when FIQ is not enabled
 {
 #if AARCH == 64
-	u32 *pMagic = (u32 *) ARMSTUB_FIQ_MAGIC_ADDR;
+	u32 * volatile pMagic = (u32 * volatile) ARMSTUB_FIQ_MAGIC_ADDR;
 	if (*pMagic != ARMSTUB_FIQ_MAGIC)
 	{
 		return;

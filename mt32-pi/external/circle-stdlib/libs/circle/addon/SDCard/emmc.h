@@ -64,6 +64,8 @@ public:
 
 	u64 Seek (u64 ullOffset);
 
+	u64 GetSize (void) const;
+
 	const u32 *GetID (void);
 
 private:
@@ -86,6 +88,10 @@ private:
 #endif
 	boolean IssueCommand (u32 command, u32 argument, int timeout = 500000);
 
+#ifndef USE_EMBEDDED_MMC_CM
+	u32 GetCSDField (unsigned start, unsigned width) const;
+#endif
+
 	int CardReset (void);
 	int CardInit (void);
 
@@ -95,7 +101,7 @@ private:
 	int DoWrite (u8 *buf, size_t buf_size, u32 block_no);
 
 #ifndef USE_SDHOST
-	int TimeoutWait (unsigned reg, unsigned mask, int value, unsigned usec);
+	int TimeoutWait (unsigned long reg, unsigned mask, int value, unsigned usec);
 #endif
 
 	void usDelay (unsigned usec);
@@ -126,6 +132,9 @@ private:
 
 	// was: struct emmc_block_dev
 	u32 m_device_id[4];
+
+	u32 m_csd[4];
+	u64 m_capacity;
 
 	u32 m_card_supports_sdhc;
 	u32 m_card_supports_hs;

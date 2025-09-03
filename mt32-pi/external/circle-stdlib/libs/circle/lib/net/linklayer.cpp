@@ -2,7 +2,7 @@
 // linklayer.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2015-2020  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2015-2024  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -132,6 +132,17 @@ boolean CLinkLayer::Send (const CIPAddress &rReceiver, const void *pIPPacket, un
 		return FALSE;
 	}
 
+	assert (pIPPacket != 0);
+	assert (nLength > 0);
+	assert (m_pNetConfig != 0);
+	if (   !rReceiver.IsNull ()
+	    && rReceiver == *m_pNetConfig->GetIPAddress ())
+	{
+		m_IPRxQueue.Enqueue (pIPPacket, nLength);	// loop back to own address
+
+		return TRUE;
+	}
+
 	u8 FrameBuffer[nFrameLength];
 	TEthernetHeader *pHeader = (TEthernetHeader *) FrameBuffer;
 
@@ -142,17 +153,25 @@ boolean CLinkLayer::Send (const CIPAddress &rReceiver, const void *pIPPacket, un
 
 	pHeader->nProtocolType = BE (ETH_PROT_IP);
 
-	assert (pIPPacket != 0);
-	assert (nLength > 0);
 	memcpy (FrameBuffer+sizeof (TEthernetHeader), pIPPacket, nLength);
 
-	assert (m_pNetConfig != 0);
 	assert (m_pARPHandler != 0);
 	CMACAddress MACAddressReceiver;
 	if (   rReceiver.IsBroadcast ()
 	    || rReceiver == *m_pNetConfig->GetBroadcastAddress ())
 	{
 		MACAddressReceiver.SetBroadcast ();
+	}
+	else if (rReceiver.IsMulticast ())
+	{
+		u8 TempMACAddress[MAC_ADDRESS_SIZE];
+		rReceiver.CopyTo (TempMACAddress + 2);
+
+		TempMACAddress[0] = 0x01;
+		TempMACAddress[1] = 0x00;
+		TempMACAddress[2] = 0x5E;
+
+		MACAddressReceiver.Set (TempMACAddress);
 	}
 	else if (!m_pARPHandler->Resolve (rReceiver, &MACAddressReceiver,
 					  FrameBuffer, nFrameLength))

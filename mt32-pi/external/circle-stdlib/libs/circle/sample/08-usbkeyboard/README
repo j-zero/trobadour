@@ -17,13 +17,25 @@ In "cooked mode" (used by default) a keyboard translation map is used to
 translate the physical key code into the right ASCII code or in an escape
 sequence for special keys (see the file doc/keyboard.txt). There are six of
 these language-depended maps at the moment (UK English, Spanish, French,
-Italian, US International and German). Select the wanted map at the end of the
-file include/circle/sysconfig.h before building (defaUlt map) or by using the
-file cmdline.txt (e.g. "keymap=UK"). The "Caps Lock" and "Num Lock" keys should
-work as expected. If you press Ctrl-Alt-Del the system reboots.
+Italian, US International, German and Dvorak). Select the wanted map at the end
+of the file include/circle/sysconfig.h before building (defaUlt map) or by using
+the file cmdline.txt (e.g. "keymap=UK"). The "Caps Lock" and "Num Lock" keys
+should work as expected. If you press Ctrl-Alt-Del the system reboots.
 
 In "raw mode" the physical key codes of the pressed keys are send to the
 key-pressed handler. To test this please change the #if in CKernel::Run() in the
 file kernel.cpp. You can also use it to discover to physical key codes if you
 want to construct your own keymap (file lib/input/keymap_??.h). Note that it
 depends on the keyboard how many keys it can detect simultaneous (maximum is 6).
+
+
+This example can be used on a ST7789- or ILI9314-based SPI display or on
+a SSD1306-based I2C display too. For it you have to update the configuration for
+your display in the file addon/display/displayconfig.h and must enable one (!)
+of the following definitions in the Makefile before build:
+
+SPI_DISPLAY = DISPLAY_TYPE_ST7789
+SPI_DISPLAY = DISPLAY_TYPE_ILI9341
+I2C_DISPLAY = DISPLAY_TYPE_SSD1306
+
+You also have to build the library in addon/display/ before build.

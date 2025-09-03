@@ -11,9 +11,10 @@ function usage()
 	echo
 	echo "Options:"
 	echo "  -r <number>, --raspberrypi <number>"
-	echo "                     Raspberry Pi model number (1, 2, 3, 4, default: 1)"
+	echo "                     Raspberry Pi model number (1, 2, 3, 4, 5, default: 1)"
 	echo "  -p <string>, --prefix <string> "
-	echo "                     Prefix of the toolchain commands (default: arm-none-eabi-)"
+	echo "                     Prefix of the toolchain commands"
+	echo "                     (default: arm-none-eabi-, aarch64-none-elf- with -r 5)"
 	echo "  --multicore        Allow multi-core applications"
 	echo "  --realtime         Enable real time mode to improve IRQ latency"
 	echo "  --keymap <country> Set default USB keymap (DE, ES, FR, IT, UK, US)"
@@ -31,15 +32,6 @@ function usage()
 cd "${BASH_SOURCE%/*}" || exit 1
 TOPDIR="$PWD"
 
-TEMP=$(getopt -o r:p:d:fh \
-	--long raspberrypi:,prefix:,multicore,realtime,keymap:,qemu,define:,c++17,force,help \
-	-n 'configure' -- "$@")
-
-if [ $? != 0 ] ; then usage; exit 1 ; fi
-
-# Note the quotes around `$TEMP': they are essential!
-eval set -- "$TEMP"
-
 RASPPI=1
 PREFIX=arm-none-eabi-
 MULTICORE=0
@@ -49,23 +41,37 @@ QEMU=0
 CPP17=0
 DEFINE=
 FORCE=0
+SHIFT=0
 
-while true ; do
+while [ ${#} -gt 0 ]; do
 	case "$1" in
-		-r|--raspberrypi) RASPPI="$2" ; shift 2;;
-		-p|--prefix) PREFIX="$2" ; shift 2;;
-		--multicore) MULTICORE=1 ; shift;;
-		--realtime) REALTIME=1 ; shift;;
-		--keymap) KEYMAP="$2" ; shift 2;;
-		--qemu) QEMU=1 ; shift;;
-		--c++17) CPP17=1 ; shift;;
-		-d|--define) DEFINE="$DEFINE -D$2" ; shift 2;;
-		-f|--force) FORCE=1 ; shift;;
+		-r|--raspberrypi) RASPPI="$2" ; SHIFT=2;;
+		-p|--prefix) PREFIX="$2" ; SHIFT=2;;
+		--multicore) MULTICORE=1 ; SHIFT=1;;
+		--realtime) REALTIME=1 ; SHIFT=1;;
+		--keymap) KEYMAP="$2" ; SHIFT=2;;
+		--qemu) QEMU=1 ; SHIFT=1;;
+		--c++17) CPP17=1 ; SHIFT=1;;
+		-d|--define) DEFINE="$DEFINE -D$2" ; SHIFT=2;;
+		-f|--force) FORCE=1 ; SHIFT=1;;
 		-h|--help) usage ; exit 0;;
-		--) shift ; break ;;
-		*) echo "Internal error" ; exit 1;;
+		*) echo "Unknown argument: '$1'" >&2; usage >&2; exit 1;;
 	esac
+	if [ "${#}" -lt "${SHIFT}" ]; then
+		echo "'$1' requires an argument" >&2
+		usage >&2
+		exit 1
+	fi
+	shift "${SHIFT}"
 done
+
+if [ $RASPPI -eq 5 ]
+then
+	if [ "$PREFIX" == "arm-none-eabi-" ]
+	then
+		PREFIX=aarch64-none-elf-
+	fi
+fi
 
 : ${CC:="$PREFIX"gcc}
 
@@ -88,7 +94,7 @@ then
 fi
 
 case "$RASPPI" in
-	1|2|3|4) ;;
+	1|2|3|4|5) ;;
 	*) echo "Error: Unknown Raspberry Pi target: ${RASPPI}" >&2; exit 1;;
 esac
 
@@ -146,4 +152,4 @@ echo "Configuration file successfully created:"
 echo
 cat "$CONFIG_FILE"
 echo
-echo "Now enter ./makeall to build the Circle libraries and the latest sample!"
+echo "Now enter ./makeall to build the Circle libraries!"

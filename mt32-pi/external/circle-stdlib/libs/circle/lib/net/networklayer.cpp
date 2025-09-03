@@ -2,7 +2,7 @@
 // networklayer.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2015-2020  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2015-2024  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,7 +26,8 @@
 CNetworkLayer::CNetworkLayer (CNetConfig *pNetConfig, CLinkLayer *pLinkLayer)
 :	m_pNetConfig (pNetConfig),
 	m_pLinkLayer (pLinkLayer),
-	m_pICMPHandler (0)
+	m_pICMPHandler (0),
+	m_pICMPRxQueue2 (0)
 {
 	assert (m_pNetConfig != 0);
 	assert (m_pLinkLayer != 0);
@@ -34,6 +35,9 @@ CNetworkLayer::CNetworkLayer (CNetConfig *pNetConfig, CLinkLayer *pLinkLayer)
 
 CNetworkLayer::~CNetworkLayer (void)
 {
+	delete m_pICMPRxQueue2;
+	m_pICMPRxQueue2 = 0;
+
 	delete m_pICMPHandler;
 	m_pICMPHandler = 0;
 
@@ -127,6 +131,16 @@ void CNetworkLayer::Process (void)
 
 		if (pHeader->nProtocol == IPPROTO_ICMP)
 		{
+			if (m_pICMPRxQueue2 != 0)
+			{
+				TNetworkPrivateData *pParam2 = new TNetworkPrivateData;
+				assert (pParam2 != 0);
+				memcpy (pParam2, pParam, sizeof *pParam);
+
+				m_pICMPRxQueue2->Enqueue (Buffer+nHeaderLength, nResultLength,
+							  pParam2);
+			}
+
 			m_ICMPRxQueue.Enqueue (Buffer+nHeaderLength, nResultLength, pParam);
 		}
 		else
@@ -156,7 +170,7 @@ boolean CNetworkLayer::Send (const CIPAddress &rReceiver, const void *pPacket, u
 	pHeader->nTotalLength         = le2be16 ((u16) nPacketLength);
 	pHeader->nIdentification      = BE (IP_IDENTIFICATION_DEFAULT);
 	pHeader->nFlagsFragmentOffset = IP_FLAGS_DF | BE (IP_FRAGMENT_OFFSET_FIRST);
-	pHeader->nTTL                 = IP_TTL_DEFAULT;
+	pHeader->nTTL                 = rReceiver.IsMulticast () ? IP_TTL_MULTICAST : IP_TTL_DEFAULT;
 	pHeader->nProtocol            = (u8) nProtocol;
 
 	assert (m_pNetConfig != 0);
@@ -184,7 +198,8 @@ boolean CNetworkLayer::Send (const CIPAddress &rReceiver, const void *pPacket, u
 
 	CIPAddress GatewayIP;
 	const CIPAddress *pNextHop = &rReceiver;
-	if (!pOwnIPAddress->OnSameNetwork (rReceiver, m_pNetConfig->GetNetMask ()))
+	if (   !rReceiver.IsMulticast ()
+	    && !pOwnIPAddress->OnSameNetwork (rReceiver, m_pNetConfig->GetNetMask ()))
 	{
 		const u8 *pGateway = m_RouteCache.GetRoute (rReceiver.Get ());
 		if (pGateway != 0)
@@ -270,6 +285,68 @@ boolean CNetworkLayer::ReceiveNotification (TICMPNotificationType *pType,
 
 	assert (pReceivePort != 0);
 	*pReceivePort = Notification.nDestinationPort;
+
+	return TRUE;
+}
+
+void CNetworkLayer::EnableReceiveICMP (boolean bEnable)
+{
+	if (bEnable)
+	{
+		if (m_pICMPRxQueue2 == 0)
+		{
+			m_pICMPRxQueue2 = new CNetQueue;
+			assert (m_pICMPRxQueue2 != 0);
+		}
+	}
+	else
+	{
+		if (m_pICMPRxQueue2 != 0)
+		{
+			void *pParam;
+			u8 Buffer[FRAME_BUFFER_SIZE];
+			while (m_pICMPRxQueue2->Dequeue (Buffer, &pParam))
+			{
+				TNetworkPrivateData *pData = (TNetworkPrivateData *) pParam;
+				delete pData;
+			}
+
+			delete m_pICMPRxQueue2;
+			m_pICMPRxQueue2 = 0;
+		}
+	}
+}
+
+boolean CNetworkLayer::ReceiveICMP (void *pBuffer, unsigned *pResultLength,
+				    CIPAddress *pSender, CIPAddress *pReceiver)
+{
+	if (m_pICMPRxQueue2 == 0)
+	{
+		return FALSE;
+	}
+
+	void *pParam;
+	assert (pBuffer != 0);
+	assert (pResultLength != 0);
+	*pResultLength = m_pICMPRxQueue2->Dequeue (pBuffer, &pParam);
+	if (*pResultLength == 0)
+	{
+		return FALSE;
+	}
+
+	TNetworkPrivateData *pData = (TNetworkPrivateData *) pParam;
+	assert (pData != 0);
+
+	assert (pData->nProtocol == IPPROTO_ICMP);
+
+	assert (pSender != 0);
+	pSender->Set (pData->SourceAddress);
+
+	assert (pReceiver != 0);
+	pReceiver->Set (pData->DestinationAddress);
+
+	delete pData;
+	pData = 0;
 
 	return TRUE;
 }

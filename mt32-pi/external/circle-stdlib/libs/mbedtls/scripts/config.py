@@ -2,25 +2,17 @@
 
 """Mbed TLS configuration file manipulation library and tool
 
-Basic usage, to read the Mbed TLS or Mbed Crypto configuration:
+Basic usage, to read the Mbed TLS configuration:
     config = ConfigFile()
     if 'MBEDTLS_RSA_C' in config: print('RSA is enabled')
 """
 
+# Note that the version of this script in the mbedtls-2.28 branch must remain
+# compatible with Python 3.4.
+
 ## Copyright The Mbed TLS Contributors
-## SPDX-License-Identifier: Apache-2.0
+## SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 ##
-## Licensed under the Apache License, Version 2.0 (the "License"); you may
-## not use this file except in compliance with the License.
-## You may obtain a copy of the License at
-##
-## http://www.apache.org/licenses/LICENSE-2.0
-##
-## Unless required by applicable law or agreed to in writing, software
-## distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-## WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-## See the License for the specific language governing permissions and
-## limitations under the License.
 
 import os
 import re
@@ -193,11 +185,12 @@ EXCLUDE_FROM_FULL = frozenset([
     'MBEDTLS_NO_UDBL_DIVISION', # influences anything that uses bignum
     'MBEDTLS_PKCS11_C', # build dependency (libpkcs11-helper)
     'MBEDTLS_PLATFORM_NO_STD_FUNCTIONS', # removes a feature
+    'MBEDTLS_PSA_ASSUME_EXCLUSIVE_BUFFERS', # removes a feature
     'MBEDTLS_PSA_CRYPTO_CONFIG', # toggles old/new style PSA config
     'MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG', # behavior change + build dependency
     'MBEDTLS_PSA_CRYPTO_KEY_ID_ENCODES_OWNER', # incompatible with USE_PSA_CRYPTO
     'MBEDTLS_PSA_CRYPTO_SPM', # platform dependency (PSA SPM)
-    'MBEDTLS_PSA_INJECT_ENTROPY', # build dependency (hook functions)
+    'MBEDTLS_PSA_INJECT_ENTROPY', # conflicts with platform entropy sources
     'MBEDTLS_REMOVE_3DES_CIPHERSUITES', # removes a feature
     'MBEDTLS_REMOVE_ARC4_CIPHERSUITES', # removes a feature
     'MBEDTLS_RSA_NO_CRT', # influences the use of RSA in X.509 and TLS
@@ -222,7 +215,11 @@ def is_seamless_alt(name):
     Exclude alternative implementations of library functions since they require
     an implementation of the relevant functions and an xxx_alt.h header.
     """
-    if name == 'MBEDTLS_PLATFORM_SETUP_TEARDOWN_ALT':
+    if name in (
+            'MBEDTLS_PLATFORM_GMTIME_R_ALT',
+            'MBEDTLS_PLATFORM_SETUP_TEARDOWN_ALT',
+            'MBEDTLS_PLATFORM_ZEROIZE_ALT',
+    ):
         # Similar to non-platform xxx_ALT, requires platform_alt.h
         return False
     return name.startswith('MBEDTLS_PLATFORM_')
@@ -329,6 +326,7 @@ def crypto_adapter(adapter):
 
 DEPRECATED = frozenset([
     'MBEDTLS_SSL_PROTO_SSL3',
+    'MBEDTLS_SSL_CLI_ALLOW_WEAK_CERTIFICATE_VERIFICATION_WITHOUT_HOSTNAME',
     'MBEDTLS_SSL_SRV_SUPPORT_SSLV2_CLIENT_HELLO',
 ])
 
@@ -343,6 +341,22 @@ def no_deprecated_adapter(adapter):
         if name == 'MBEDTLS_DEPRECATED_REMOVED':
             return True
         if name in DEPRECATED:
+            return False
+        if adapter is None:
+            return active
+        return adapter(name, active, section)
+    return continuation
+
+def no_platform_adapter(adapter):
+    """Modify an adapter to disable platform symbols.
+
+    ``no_platform_adapter(adapter)(name, active, section)`` is like
+    ``adapter(name, active, section)``, but unsets all platform symbols other
+    ``than MBEDTLS_PLATFORM_C.
+    """
+    def continuation(name, active, section):
+        # Allow MBEDTLS_PLATFORM_C but remove all other platform symbols.
+        if name.startswith('MBEDTLS_PLATFORM_') and name != 'MBEDTLS_PLATFORM_C':
             return False
         if adapter is None:
             return active
@@ -376,6 +390,7 @@ class ConfigFile(Config):
                                 self.default_path)
         super().__init__()
         self.filename = filename
+        self.inclusion_guard = None
         self.current_section = 'header'
         with open(filename, 'r', encoding='utf-8') as file:
             self.templates = [self._parse_line(line) for line in file]
@@ -393,9 +408,11 @@ class ConfigFile(Config):
                            r'(?P<arguments>(?:\((?:\w|\s|,)*\))?)' +
                            r'(?P<separator>\s*)' +
                            r'(?P<value>.*)')
+    _ifndef_line_regexp = r'#ifndef (?P<inclusion_guard>\w+)'
     _section_line_regexp = (r'\s*/?\*+\s*[\\@]name\s+SECTION:\s*' +
                             r'(?P<section>.*)[ */]*')
     _config_line_regexp = re.compile(r'|'.join([_define_line_regexp,
+                                                _ifndef_line_regexp,
                                                 _section_line_regexp]))
     def _parse_line(self, line):
         """Parse a line in config.h and return the corresponding template."""
@@ -406,10 +423,16 @@ class ConfigFile(Config):
         elif m.group('section'):
             self.current_section = m.group('section')
             return line
+        elif m.group('inclusion_guard') and self.inclusion_guard is None:
+            self.inclusion_guard = m.group('inclusion_guard')
+            return line
         else:
             active = not m.group('commented_out')
             name = m.group('name')
             value = m.group('value')
+            if name == self.inclusion_guard and value == '':
+                # The file double-inclusion guard is not an option.
+                return line
             template = (name,
                         m.group('indentation'),
                         m.group('define') + name +
@@ -465,7 +488,7 @@ if __name__ == '__main__':
     def main():
         """Command line config.h manipulation tool."""
         parser = argparse.ArgumentParser(description="""
-        Mbed TLS and Mbed Crypto configuration file manipulation tool.
+        Mbed TLS configuration file manipulation tool.
         """)
         parser.add_argument('--file', '-f',
                             help="""File to read (and modify if requested).
@@ -520,6 +543,10 @@ if __name__ == '__main__':
         add_adapter('full_no_deprecated', no_deprecated_adapter(full_adapter),
                     """Uncomment most non-deprecated features.
                     Like "full", but without deprecated features.
+                    """)
+        add_adapter('full_no_platform', no_platform_adapter(full_adapter),
+                    """Uncomment most non-platform features.
+                    Like "full", but without platform features.
                     """)
         add_adapter('realfull', realfull_adapter,
                     """Uncomment all boolean #defines.

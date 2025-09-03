@@ -38,10 +38,8 @@ public:
 	static CUSBFunction *GetDevice (CUSBFunction *pParent, CString *pName);
 
 private:
-#if 0
 	// for "int3-0-0" devices
 	static CUSBFunction *GetGenericHIDDevice (CUSBFunction *pParent);
-#endif
 
 	static boolean FindDeviceID (CString *pName, const TUSBDeviceID *pIDTable);
 };

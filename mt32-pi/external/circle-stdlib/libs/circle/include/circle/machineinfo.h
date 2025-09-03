@@ -2,7 +2,7 @@
 // machineinfo.h
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2016-2022  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2016-2025  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -48,6 +48,10 @@ enum TMachineModel
 	MachineModel400,
 	MachineModelCM4,
 	MachineModelCM4S,
+	MachineModel5,
+	MachineModel500,
+	MachineModelCM5,
+	MachineModelCM5Lite,
 	MachineModelUnknown
 };
 
@@ -57,7 +61,15 @@ enum TSoCType
 	SoCTypeBCM2836,
 	SoCTypeBCM2837,
 	SoCTypeBCM2711,
+	SoCTypeBCM2712,
 	SoCTypeUnknown
+};
+
+enum TSoCStepping : u8
+{
+	SoCSteppingC1		= 0x21,
+	SoCSteppingD0		= 0x30,
+	SoCSteppingUnknown	= 0xFF
 };
 
 enum TDeviceId
@@ -87,6 +99,7 @@ public:
 	unsigned GetModelMajor (void) const;		// 1..3, 0 on error
 	unsigned GetModelRevision (void) const;		// 1-based, 0 on error
 	TSoCType GetSoCType (void) const;
+	TSoCStepping GetSoCStepping (void) const;
 	unsigned GetRAMSize (void) const;		// MByte, 0 on error
 
 	const char *GetSoCName (void) const;
@@ -113,15 +126,25 @@ public:
 	// DMA channel resource management
 #if RASPPI <= 3
 #define DMA_CHANNEL_MAX		11			// channels 0-11 are supported
-#else
+#elif RASPPI == 4
 #define DMA_CHANNEL_MAX		7			// legacy channels 0-7 are supported
 #define DMA_CHANNEL_EXT_MIN	11			// DMA4 channels 11-14 are supported
 #define DMA_CHANNEL_EXT_MAX	14
+#else
+#define DMA_CHANNEL_MAX		5			// TODO: support legacy channels 0-5
+#define DMA_CHANNEL_EXT_MIN	6			// DMA4 channels 6-11 are supported
+#define DMA_CHANNEL_EXT_MAX	11
 #endif
 #define DMA_CHANNEL__MASK	0x0F			// explicit channel number
 #define DMA_CHANNEL_NONE	0x80			// returned if no channel available
+#if RASPPI <= 4
 #define DMA_CHANNEL_NORMAL	0x81			// normal DMA engine requested
 #define DMA_CHANNEL_LITE	0x82			// lite (or normal) DMA engine requested
+#else
+// TODO: currently only extended DMA4 engines are supported for Raspberry Pi 5
+#define DMA_CHANNEL_NORMAL	DMA_CHANNEL_EXTENDED	// TODO: define 0x81 instead
+#define DMA_CHANNEL_LITE	DMA_CHANNEL_EXTENDED	// TODO: define 0x82 instead
+#endif
 #if RASPPI >= 4
 #define DMA_CHANNEL_EXTENDED	0x83			// "large address" DMA4 engine requested
 #endif
@@ -134,7 +157,23 @@ public:
 	// Devicetree blob handling
 	void FetchDTB (void);
 
-	TMemoryWindow GetPCIeDMAMemory (void) const;
+	const CDeviceTreeBlob *GetDTB (void) const;
+
+#define PCIE_BUS_ONBOARD	0
+	#define PCIE_BUS_XHCI	PCIE_BUS_ONBOARD
+#if RASPPI == 4
+#define PCIE_BUS_NUM		1
+#else
+	#define PCIE_BUS_RP1	PCIE_BUS_ONBOARD
+	#define PCIE_BUS_MACB	PCIE_BUS_ONBOARD
+#define PCIE_BUS_EXTERNAL	1
+	#define PCIE_BUS_NVME	PCIE_BUS_EXTERNAL
+#define PCIE_BUS_NUM		2
+#endif
+	TMemoryWindow GetPCIeMemory (unsigned nBus) const;	// outbound
+	TMemoryWindow GetPCIeDMAMemory (unsigned nBus) const;	// inbound
+#else
+#define PCIE_BUS_NUM		0
 #endif
 
 	static CMachineInfo *Get (void);
@@ -145,6 +184,7 @@ private:
 	unsigned	m_nModelMajor	  MAXALIGN;
 	unsigned	m_nModelRevision  MAXALIGN;
 	TSoCType	m_SoCType	  MAXALIGN;
+	TSoCStepping	m_SoCStepping	  MAXALIGN;
 	unsigned	m_nRAMSize	  MAXALIGN;
 
 	u16		m_usDMAChannelMap MAXALIGN;	// channel bit set if channel is free

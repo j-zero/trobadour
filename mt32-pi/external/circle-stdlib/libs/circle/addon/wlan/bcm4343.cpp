@@ -2,7 +2,7 @@
 // bcm4343.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2020-2021  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2020-2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,12 +19,16 @@
 //
 #include <wlan/bcm4343.h>
 #include <wlan/p9compat.h>
+#include <circle/logger.h>
+#include <circle/machineinfo.h>
 #include <circle/sysconfig.h>
 #include <assert.h>
 
 #if RASPPI <= 3 && !defined (USE_SDHOST)
 	#warning WLAN cannot be used parallel with SD card access in this configuration!
 #endif
+
+LOGMODULE ("bcm4343");
 
 extern "C" void ether4330link (void);
 
@@ -51,6 +55,27 @@ CBcm4343Device::~CBcm4343Device (void)
 
 boolean CBcm4343Device::Initialize (void)
 {
+#if RASPPI >= 5
+	// Fetch local MAC address from DTB
+	const CDeviceTreeBlob *pDTB = CMachineInfo::Get ()->GetDTB ();
+	const TDeviceTreeNode *pWifi1Node;
+	const TDeviceTreeProperty *pLocalMACAddress;
+
+	if (   !pDTB
+	    || !(pWifi1Node = pDTB->FindNode ("/axi/mmc@1100000/wifi@1"))
+	    || !(pLocalMACAddress = pDTB->FindProperty (pWifi1Node, "local-mac-address"))
+	    || pDTB->GetPropertyValueLength (pLocalMACAddress) != 6)
+	{
+		LOGERR ("Cannot get MAC address from DTB");
+
+		return FALSE;
+	}
+
+	m_MACAddress.Set (pDTB->GetPropertyValue (pLocalMACAddress));
+
+	m_MACAddress.CopyTo (s_EtherDevice.ea);
+#endif
+
 	p9arch_init ();
 	p9chan_init (m_FirmwarePath);
 	p9proc_init ();
@@ -70,7 +95,9 @@ boolean CBcm4343Device::Initialize (void)
 	assert (s_EtherDevice.attach != 0);
 	(*s_EtherDevice.attach) (&s_EtherDevice);
 
+#if RASPPI < 5
 	m_MACAddress.Set (s_EtherDevice.ea);
+#endif
 
 	AddNetDevice ();
 
@@ -199,6 +226,11 @@ boolean CBcm4343Device::CreateOpenNet (const char *pSSID, int nChannel, bool bHi
 {
 	assert (pSSID != 0);
 	return Control ("create %s %d %d", pSSID, nChannel, bHidden);
+}
+
+boolean CBcm4343Device::DestroyOpenNet (void)
+{
+	return Control ("down");
 }
 
 void CBcm4343Device::DumpStatus (void)

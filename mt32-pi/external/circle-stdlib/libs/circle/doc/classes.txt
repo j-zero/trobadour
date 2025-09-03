@@ -7,7 +7,7 @@ Base library
 * CBcm54213Device: Driver for BCM54213PE Gigabit Ethernet Transceiver of Raspberry Pi 4.
 * CBcmFrameBuffer: Frame buffer initialization, setting color palette for 8 bit depth.
 * CBcmMailBox: Simple GPU mailbox interface, currently used for the property interface.
-* CBcmPCIeHostBridge: Driver for PCIe Host Bridge of Raspberry Pi 4.
+* CBcmPCIeHostBridge: Driver for PCIe Host Bridge(s) of Raspberry Pi 4 and 5.
 * CBcmPropertyTags: Get several information from the GPU side or control something on this side.
 * CBcmRandomNumberGenerator: Driver for the built-in hardware random number generator.
 * CBcmWatchdog: Driver for the BCM2835 watchdog device.
@@ -17,8 +17,10 @@ Base library
 * CDevice: Base class for all devices
 * CDeviceNameService: Devices can be registered by name and retrieved later by this name
 * CDeviceTreeBlob: Simple Devicetree blob parser
+* CDisplay: Base class for dot-matrix display drivers.
 * CDMA4Channel: Platform DMA4 "large address" controller support (helper class).
 * CDMAChannel: Platform DMA controller support (I/O read/write, memory copy).
+* CDMAChannelRP1: RP1 platform DMA controller support (for Raspberry Pi 5).
 * CExceptionHandler: Generates a stack-trace and a panic message if an abort exception occurs.
 * CGPIOClock: Using GPIO clocks, initialize, start and stop it.
 * CGPIOManager: Interrupt multiplexer for CGPIOPin (only required if GPIO interrupt is used).
@@ -27,12 +29,14 @@ Base library
 * CGenericLock: Locks a resource with or without scheduler.
 * CHeapAllocator: Allocates blocks from a flat memory region.
 * CI2CMaster: Driver for I2C master devices.
+* CI2CMasterIRQ: Driver for I2C master devices - async using IRQ.
 * CI2CSlave: Driver for I2C slave device.
 * CInterruptSystem: Connecting to interrupts, an interrupt handler will be called on interrupt.
 * CKernelOptions: Providing kernel options from file cmdline.txt (see doc/cmdline.txt).
 * CLatencyTester: Measures the IRQ latency of the running code.
 * CLogger: Writing logging messages to a target device
 * CMACAddress: Encapsulates an Ethernet MAC address.
+* CMACBDevice: Driver for MACB/GEM Ethernet NIC of Raspberry Pi 5.
 * CMachineInfo: Helper class to get different information about the running computer.
 * CMemorySystem: Enabling MMU if requested, switching page tables (not used here).
 * CMPHIDevice: A driver, which uses the MPHI device to generate an IRQ.
@@ -46,6 +50,7 @@ Base library
 * CPtrList: Container class. List of pointers.
 * CPtrListFIQ: Container class. List of pointers, usable from FIQ_LEVEL.
 * CPWMOutput: Pulse Width Modulator output (2 channels).
+* CSouthbridge: Driver for the RP1 multi-function device of the Raspberry Pi 5.
 * CScreenDevice: Writing characters to screen, some escape sequences (some are not yet implemented)
 * CSerialDevice: Driver for PL011 UART, interrupt or polling mode
 * CSMIMaster: Driver for the Second Memory Interface.
@@ -54,12 +59,14 @@ Base library
 * CSPIMasterAUX: Driver for the auxiliary SPI master (SPI1).
 * CSPIMasterDMA: Driver for SPI0 master device. Asynchronous DMA operation.
 * CString: Simple string manipulation class, Format() method works like printf() (but has less formating options)
+* CTerminalDevice: Terminal support for dot-matrix displays.
 * CTime: Holds, makes and breaks the time.
 * CTimer: Manages the system clock, supports kernel timers and a calibrated delay loop.
 * CTracer: Collects tracing events in a ring buffer for debugging and dumps them to the logger later.
 * CTranslationTable: Encapsulates a translation table to be used by MMU (AArch64).
 * CUserTimer: Fine grained user programmable interrupt timer (based on ARM_IRQ_TIMER1)
 * CVirtualGPIOPin: Encapsulates a "virtual" GPIO pin controlled by the VideoCore (Output only).
+* CWindowDisplay: Non-overlapping window on a display.
 * CWriteBufferDevice: Filter for buffered write to (e.g. screen) device.
 
 USB library
@@ -84,9 +91,11 @@ USB library
 * CUSBBulkOnlyMassStorageDevice: Driver for USB mass storage devices (bulk only)
 * CUSBCDCEthernetDevice: Driver for the USB CDC Ethernet device implemented in QEMU.
 * CUSBConfigurationParser: Parses and validates an USB configuration descriptor.
+* CUSBController: Generic USB (host or gadget) controller
 * CUSBDevice: Encapsulates a general USB device (detects the functions of this device).
 * CUSBDeviceFactory: Creates the function objects of the different supported USB functions.
 * CUSBEndpoint: Encapsulates an endpoint of an USB device (supports control, bulk and interrupt EPs).
+* CUSBFloppyDiskDevice: Driver for USB floppy disk devices (CBI transport).
 * CUSBFunction: Encapsulates a function (represented by an interface descriptor) of an USB device.
 * CUSBGamePadDevice: Base class for USB gamepad drivers
 * CUSBGamePadPS3Device: Driver for PS3 gamepad
@@ -95,23 +104,27 @@ USB library
 * CUSBGamePadSwitchProDevice: Driver for Nintendo Switch Pro gamepad
 * CUSBGamePadXbox360Device: Driver for Xbox 360 Wired gamepad
 * CUSBGamePadXboxOneDevice: Driver for Xbox One gamepad
-* CUSBHCIDevice: Alias for CDWHCIDevice or CXHCIDevice, depending on Raspberry Pi model.
+* CUSBHCIDevice: Alias for CDWHCIDevice, CXHCIDevice or CUSBSubSystem, depending on Raspberry Pi model.
 * CUSBHCIRootPort: Base class, which represents an USB HCI root port.
 * CUSBHIDDevice: General USB HID device (e.g. keyboard, mouse, gamepad)
-* CUSBHostController: Base class of CDWHCIDevice, some basic functions for host controllers.
+* CUSBHostController: Base class of USB host controllers.
 * CUSBKeyboardDevice: Driver for USB keyboards
-* CUSBMIDIDevice: Driver for USB Audio Class MIDI 1.0 devices
+* CUSBMIDIDevice: Interface device for USB Audio Class MIDI 1.0 devices
+* CUSBMIDIHostDevice: Host driver for USB Audio Class MIDI 1.0 devices
 * CUSBMouseDevice: Driver for USB mice
 * CUSBPrinterDevice: Simple communications driver for USB printers (back-channel is not used).
 * CUSBRequest: A request to an USB device (URB).
+* CUSBSerialDevice: Interface device for USB serial devices.
 * CUSBSerialCDCDevice: Driver for USB CDC serial devices (e.g. micro:bit)
 * CUSBSerialCH341Device: Driver for CH341 based USB serial devices
-* CUSBSerialCP2102Device: Driver for CP2102 based USB serial devices
+* CUSBSerialCP210xDevice: Driver for CP210x based USB serial devices
 * CUSBSerialDevice: Base class and interface for USB serial device drivers
 * CUSBSerialFT231XDevice: Driver for FTDI based USB serial devices
+* CUSBSerialHostDevice: Generic host driver for USB serial devices
 * CUSBSerialPL2303Device: Driver for PL2303 based USB serial devices
 * CUSBStandardHub: USB hub driver for LAN9512/9514 and external hubs (max. 8 ports)
 * CUSBString: Encapsulates a string descriptor, available on an USB device.
+* CUSBSubSystem: USB sub-system of the Raspberry Pi 5.
 * CUSBTouchScreenDevice: Driver for USB HID-class touchscreens.
 * CXHCICommandManager: Synchronous xHC command execution for the xHCI driver.
 * CXHCIDevice: USB host controller interface (xHCI) driver for Raspberry Pi 4.
@@ -125,6 +138,18 @@ USB library
 * CXHCISlotManager: Manages the USB device slots of the xHCI controller.
 * CXHCIUSBDevice: Encapsulates a single USB device, attached to the xHCI controller.
 
+USB gadget library
+
+* CUSBCDCGadget: USB serial CDC gadget
+* CUSBCDCGadgetEndpoint: Endpoint of the USB serial CDC gadget
+* CDWUSBGadget: DW USB gadget on Raspberry Pi (3)A(+), Zero (2) (W), 4B
+* CDWUSBGadgetEndpoint: Endpoint of a DW USB gadget
+* CDWUSBGadgetEndpoint0: Endpoint 0 of a DW USB gadget
+* CUSBMIDIGadget: USB MIDI (v1.0) gadget
+* CUSBMIDIGadgetEndpoint: Endpoint of the USB MIDI gadget
+* CUSBMSDGadget: USB mass storage device gadget
+* CUSBMSDGadgetEndpoint: Endpoint of the USB mass storage gadget
+
 Input library
 
 * CConsole: Console device using screen/USB keyboard or alternate device (e.g. CSerialDevice)
@@ -136,6 +161,7 @@ Input library
 * CMouseDevice: Generic mouse interface device
 * CRPiTouchScreen: Driver for the official Raspberry Pi touch screen
 * CTouchScreenDevice: Generic touch screen interface device
+* CXPT2046TouchScreen: Driver for XPT2046-based touch screens
 
 FS library
 
@@ -169,6 +195,7 @@ Net library
 * CICMPHandler: ICMP error message handler and echo (ping) responder.
 * CIPAddress: Encapsulates an IP address.
 * CLinkLayer: Encapsulates the Ethernet MAC layer.
+* CmDNSPublisher: mDNS / Bonjour client task.
 * CMQTTClient: Client for the MQTT IoT protocol.
 * CMQTTReceivePacket: MQTT helper class.
 * CMQTTSendPacket: MQTT helper class.

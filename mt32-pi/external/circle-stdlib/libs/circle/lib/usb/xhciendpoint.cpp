@@ -2,7 +2,7 @@
 // xhciendpoint.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2019-2022  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2019-2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -221,9 +221,10 @@ boolean CXHCIEndpoint::Transfer (CUSBRequest *pURB, unsigned nTimeoutMs)
 	unsigned nStartTicks = CTimer::Get ()->GetTicks ();
 	while (!m_bTransferCompleted)
 	{
-		if (CTimer::Get ()->GetTicks () - nStartTicks >= HZ)
+		if (CTimer::Get ()->GetTicks () - nStartTicks >= 3*HZ)
 		{
-			CLogger::Get ()->Write (From, LogDebug, "Transfer timed out");
+			CLogger::Get ()->Write (From, LogDebug, "Transfer timed out (ep %u)",
+						(unsigned) pURB->GetEndpoint ()->GetNumber ());
 #ifdef XHCI_DEBUG
 			m_pDevice->DumpStatus ();
 #endif
@@ -260,6 +261,18 @@ boolean CXHCIEndpoint::TransferAsync (CUSBRequest *pURB, unsigned nTimeoutMs)
 	void *pBuffer = pURB->GetBuffer ();
 	u32 nBufLen = pURB->GetBufLen ();
 
+	m_SpinLock.Acquire ();
+	if (m_pURB[0] == 0)
+	{
+		m_pURB[0] = pURB;
+	}
+	else
+	{
+		assert (m_pURB[1] == 0);
+		m_pURB[1] = pURB;
+	}
+	m_SpinLock.Release ();
+
 	if (   (m_uchEndpointType & 3) == 2		// bulk EP
 	    || (m_uchEndpointType & 3) == 3)		// interrupt EP
 	{
@@ -275,7 +288,7 @@ boolean CXHCIEndpoint::TransferAsync (CUSBRequest *pURB, unsigned nTimeoutMs)
 				 XHCI_TO_DMA_LO (pBuffer),
 				 XHCI_TO_DMA_HI (pBuffer)))
 		{
-			return FALSE;
+			goto EnqueueError;
 		}
 	}
 	else if (m_uchEndpointType == 4)		// control EP
@@ -316,7 +329,7 @@ boolean CXHCIEndpoint::TransferAsync (CUSBRequest *pURB, unsigned nTimeoutMs)
 				 | (u32) pSetup->wValue << 16,
 				 pSetup->wIndex | (u32) pSetup->wLength << 16))
 		{
-			return FALSE;
+			goto EnqueueError;
 		}
 
 		// DATA stage
@@ -333,7 +346,7 @@ boolean CXHCIEndpoint::TransferAsync (CUSBRequest *pURB, unsigned nTimeoutMs)
 					 XHCI_TO_DMA_LO (pBuffer),
 					 XHCI_TO_DMA_HI (pBuffer)))
 			{
-				return FALSE;
+				goto EnqueueError;
 			}
 		}
 
@@ -341,7 +354,7 @@ boolean CXHCIEndpoint::TransferAsync (CUSBRequest *pURB, unsigned nTimeoutMs)
 		if (!EnqueueTRB (  XHCI_TRB_TYPE_STATUS_STAGE << XHCI_TRB_CONTROL_TRB_TYPE__SHIFT
 				 | nDirStatus | XHCI_TRANSFER_TRB_CONTROL_IOC))
 		{
-			return FALSE;
+			goto EnqueueError;
 		}
 	}
 	else
@@ -366,18 +379,12 @@ boolean CXHCIEndpoint::TransferAsync (CUSBRequest *pURB, unsigned nTimeoutMs)
 					 XHCI_TO_DMA_LO (pBuffer),
 					 XHCI_TO_DMA_HI (pBuffer)))
 			{
-				return FALSE;
+				goto EnqueueError;
 			}
 
 			pBuffer = (u8 *) pBuffer + usPacketSize;
 		}
 	}
-
-	m_SpinLock.Acquire ();
-	assert (m_pURB[1] == 0);
-	m_pURB[1] = m_pURB[0];
-	m_pURB[0] = pURB;
-	m_SpinLock.Release ();
 
 	DataSyncBarrier ();
 
@@ -386,6 +393,20 @@ boolean CXHCIEndpoint::TransferAsync (CUSBRequest *pURB, unsigned nTimeoutMs)
 	m_pMMIO->db_write32 (m_pDevice->GetSlotID (), XHCI_REG_DB_TARGET_EP0 + m_uchEndpointID-1);
 
 	return TRUE;
+
+EnqueueError:
+	m_SpinLock.Acquire ();
+	if (m_pURB[1] != 0)
+	{
+		m_pURB[1] = 0;
+	}
+	else
+	{
+		m_pURB[0] = 0;
+	}
+	m_SpinLock.Release ();
+
+	return FALSE;
 }
 
 void CXHCIEndpoint::TransferEvent (u8 uchCompletionCode, u32 nTransferLength)
@@ -421,6 +442,12 @@ void CXHCIEndpoint::TransferEvent (u8 uchCompletionCode, u32 nTransferLength)
 
 		pURB->SetStatus (1);
 	}
+	else if (   uchCompletionCode == XHCI_TRB_COMPLETION_CODE_RING_UNDERRUN
+		 || uchCompletionCode == XHCI_TRB_COMPLETION_CODE_RING_OVERRUN)
+	{
+		// these events are not URB related, so just ignore them
+		return;
+	}
 	else if (pURB->GetEndpoint ()->GetType () != EndpointTypeIsochronous)
 	{
 		CLogger::Get ()->Write (From, LogWarning, "Transfer error %u on endpoint %u",
@@ -433,6 +460,26 @@ void CXHCIEndpoint::TransferEvent (u8 uchCompletionCode, u32 nTransferLength)
 	m_SpinLock.Release ();
 
 	pURB->CallCompletionRoutine ();
+}
+
+boolean CXHCIEndpoint::ResetFromHalted (void)
+{
+	assert (m_pXHCIDevice);
+	assert (m_pDevice);
+	assert (XHCI_IS_ENDPOINTID (m_uchEndpointID));
+
+	if (!m_pXHCIDevice->GetCommandManager ()->ResetEndpoint (m_pDevice->GetSlotID (),
+								 m_uchEndpointID))
+	{
+		return FALSE;
+	}
+
+	assert (m_pTransferRing);
+	return m_pXHCIDevice->GetCommandManager ()->SetTRDequeuePointer (
+								m_pDevice->GetSlotID (),
+								m_uchEndpointID,
+								m_pTransferRing->GetEnqueueTRB (),
+								!!m_pTransferRing->GetCycleState ());
 }
 
 #ifndef NDEBUG

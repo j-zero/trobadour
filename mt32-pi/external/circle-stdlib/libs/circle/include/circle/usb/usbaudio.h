@@ -5,7 +5,7 @@
 // 	Copyright (C) 2016  J. Otto <joshua.t.otto@gmail.com>
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2017-2022  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2017-2023  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -53,8 +53,62 @@ struct TUSBMIDIStreamingEndpointDescriptor
 	unsigned char	bLength;
 	unsigned char	bDescriptorType;
 	unsigned char	bDescriptorSubType;
+#define USB_MIDI_STREAMING_SUBTYPE_GENERAL		0x01
 	unsigned char	bNumEmbMIDIJack;
-	unsigned char	bAssocJackIDs[];
+	unsigned char	bAssocJackIDs[1];
+}
+PACKED;
+
+struct TUSBMIDIStreamingInterfaceDescriptorHeader
+{
+	unsigned char	bLength;
+	unsigned char	bDescriptorType;
+	unsigned char	bDescriptorSubtype;
+#define USB_MIDI_STREAMING_IFACE_SUBTYPE_HEADER		0x01
+	unsigned short	bcdADC;
+#define USB_MIDI_STREAMING_IFACE_BCDADC_100		0x100
+	unsigned short	wTotalLength;
+}
+PACKED;
+
+struct TUSBMIDIStreamingInterfaceDescriptorInJack
+{
+	unsigned char	bLength;
+	unsigned char	bDescriptorType;
+	unsigned char	bDescriptorSubtype;
+#define USB_MIDI_STREAMING_IFACE_SUBTYPE_MIDI_IN_JACK	0x02
+	unsigned char	bJackType;
+#define USB_MIDI_STREAMING_IFACE_JACKTYPE_EMBEDDED	0x01
+#define USB_MIDI_STREAMING_IFACE_JACKTYPE_EXTERNAL	0x02
+	unsigned char	bJackID;
+	unsigned char	iJack;
+}
+PACKED;
+
+struct TUSBMIDIStreamingInterfaceDescriptorOutJack
+{
+	unsigned char	bLength;
+	unsigned char	bDescriptorType;
+	unsigned char	bDescriptorSubtype;
+#define USB_MIDI_STREAMING_IFACE_SUBTYPE_MIDI_OUT_JACK	0x03
+	unsigned char	bJackType;
+	unsigned char	bJackID;
+	unsigned char	bNrInputPins;
+	unsigned char	baSourceID[1];
+	unsigned char	baSourcePin[1];
+	unsigned char	iJack;
+}
+PACKED;
+
+struct TUSBAudioControlInterfaceDescriptorHeader
+{
+	unsigned char	bLength;
+	unsigned char	bDescriptorType;
+	unsigned char	bDescriptorSubtype;
+	unsigned short	bcdADC;
+	unsigned short	wTotalLength;
+	unsigned char	bInCollection;
+	unsigned char	baInterfaceNr[1];
 }
 PACKED;
 
@@ -70,6 +124,7 @@ struct TUSBAudioControlInterfaceDescriptor
 #define USB_AUDIO_CTL_IFACE_SUBTYPE_SELECTOR_UNIT	0x05
 #define USB_AUDIO_CTL_IFACE_SUBTYPE_FEATURE_UNIT	0x06
 #define USB_AUDIO_CTL_IFACE_SUBTYPE_CLOCK_SOURCE	0x0A		// v2.00 only
+#define USB_AUDIO_CTL_IFACE_SUBTYPE_CLOCK_SELECTOR	0x0B		// v2.00 only
 
 	union
 	{
@@ -214,6 +269,16 @@ struct TUSBAudioControlInterfaceDescriptor
 				unsigned char	iClockSource;
 			}
 			ClockSource;
+
+			struct
+			{
+				unsigned char	bClockID;
+				unsigned char	bNrInPins;
+				unsigned char	baCSourceID[];
+				//unsigned char	bmControls;
+				//unsigned char	iClockSelector;
+			}
+			ClockSelector;
 		}
 		Ver200;
 	};
@@ -241,7 +306,7 @@ struct TUSBAudioControlMixerUnitTrailerVer200
 }
 PACKED;
 
-struct CUSBAudioStreamingInterfaceDescriptor
+struct TUSBAudioStreamingInterfaceDescriptor
 {
         unsigned char	bLength;
         unsigned char	bDescriptorType;
@@ -319,5 +384,7 @@ PACKED;
 #define USB_AUDIO_FU_VOLUME_CONTROL	0x02
 
 #define USB_AUDIO_SU_SELECTOR_CONTROL	0x01		// v2.00 only
+
+#define USB_AUDIO_CX_SELECTOR_CONTROL	0x01		// v2.00 only
 
 #endif

@@ -189,9 +189,7 @@ private:
 	bool m_bSerialMIDIEnabled;
 
 	// USB devices
-	CUSBMIDIDevice* m_pUSBMIDIDevice1;
-	CUSBMIDIDevice* m_pUSBMIDIDevice2;
-
+	CUSBMIDIDevice* m_pUSBMIDIDevice;
 	CUSBSerialDevice* m_pUSBSerialDevice;
 	CUSBBulkOnlyMassStorageDevice* volatile m_pUSBMassStorageDevice;
 
@@ -223,8 +221,7 @@ private:
 
 	static void EventHandler(const TEvent& Event);
 	static void USBMIDIDeviceRemovedHandler(CDevice* pDevice, void* pContext);
-	static void USBMIDIPacketHandler1(unsigned nCable, u8* pPacket, unsigned nLength);
-	static void USBMIDIPacketHandler2(unsigned nCable, u8* pPacket, unsigned nLength);
+	static void USBMIDIPacketHandler(unsigned nCable, u8* pPacket, unsigned nLength);
 	static void IRQMIDIReceiveHandler(const u8* pData, size_t nSize);
 
 	static void PanicHandler();

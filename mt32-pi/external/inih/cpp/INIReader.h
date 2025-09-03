@@ -14,6 +14,9 @@
 
 #include <map>
 #include <string>
+#include <cstdint>
+#include <vector>
+#include <set>
 
 // Visibility symbols, required for Windows DLLs
 #ifndef INI_API
@@ -66,6 +69,18 @@ public:
     // not found or not a valid integer (decimal "1234", "-1234", or hex "0x4d2").
     INI_API long GetInteger(const std::string& section, const std::string& name, long default_value) const;
 
+    // Get a 64-bit integer (int64_t) value from INI file, returning default_value if
+    // not found or not a valid integer (decimal "1234", "-1234", or hex "0x4d2").
+    INI_API int64_t GetInteger64(const std::string& section, const std::string& name, int64_t default_value) const;
+
+    // Get an unsigned integer (unsigned long) value from INI file, returning default_value if
+    // not found or not a valid unsigned integer (decimal "1234", or hex "0x4d2").
+    INI_API unsigned long GetUnsigned(const std::string& section, const std::string& name, unsigned long default_value) const;
+
+    // Get an unsigned 64-bit integer (uint64_t) value from INI file, returning default_value if
+    // not found or not a valid unsigned integer (decimal "1234", or hex "0x4d2").
+    INI_API uint64_t GetUnsigned64(const std::string& section, const std::string& name, uint64_t default_value) const;
+
     // Get a real (floating point double) value from INI file, returning
     // default_value if not found or not a valid floating point value
     // according to strtod().
@@ -76,6 +91,12 @@ public:
     // and valid false values are "false", "no", "off", "0" (not case sensitive).
     INI_API bool GetBoolean(const std::string& section, const std::string& name, bool default_value) const;
 
+    // Return a newly-allocated vector of all section names, in alphabetical order.
+    INI_API std::vector<std::string> Sections() const;
+
+    // Return a newly-allocated vector of keys in the given section, in alphabetical order.
+    INI_API std::vector<std::string> Keys(const std::string& section) const;
+
     // Return true if the given section exists (section must contain at least
     // one name=value pair).
     INI_API bool HasSection(const std::string& section) const;
@@ -83,7 +104,7 @@ public:
     // Return true if a value exists with the given section and field names.
     INI_API bool HasValue(const std::string& section, const std::string& name) const;
 
-private:
+protected:
     int _error;
     std::map<std::string, std::string> _values;
     static std::string MakeKey(const std::string& section, const std::string& name);

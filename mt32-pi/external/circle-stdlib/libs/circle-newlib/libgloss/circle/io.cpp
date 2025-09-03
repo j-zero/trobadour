@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <circle/input/console.h>
 #include <circle/sched/scheduler.h>
-#include <circle/usb/usbhostcontroller.h>
+#include <circle/usb/usbhcidevice.h>
 #include <circle/string.h>
 #include "circle_glue.h"
 #include <assert.h>
@@ -166,9 +166,9 @@ namespace
             {
                 CScheduler * const scheduler =
                     CScheduler::IsActive () ? CScheduler::Get () : nullptr;
-                CUSBHostController * const usbhost =
-                    CUSBHostController::IsActive () ?
-                        CUSBHostController::Get () : nullptr;
+                CUSBController * const usbhost =
+                    CUSBHCIDevice::IsActive () ?
+                        CUSBHCIDevice::Get () : nullptr;
 
                 while ((nResult = mConsole.Read (pBuffer,
                                                  static_cast<size_t> (nCount)))
@@ -233,8 +233,19 @@ namespace
         int
         FStat (struct stat *buf)
         {
-            errno = EBADF;
-            return -1;
+            assert(buf);
+            memset(buf, 0, sizeof(*buf));
+
+            // Just some arbitrary but fixed values.
+            buf->st_dev = 0x0202;
+            buf->st_ino = 2000;
+            buf->st_nlink = 1;
+
+            // The important flag is S_IFCHR. This is needed by newlib
+            // internally to recognize that this is a TTY.
+            buf->st_mode = S_IRUSR | S_IWUSR | S_IFCHR;
+
+            return 0;
         }
 
         int
@@ -1116,7 +1127,7 @@ namespace {
 }
 
 extern "C" int
-fcntl (int fildes, int cmd, ...)
+_fcntl (int fildes, int cmd, ...)
 {
     if (fildes < 0 || static_cast<unsigned int> (fildes) >= MAX_OPEN_FILES)
     {

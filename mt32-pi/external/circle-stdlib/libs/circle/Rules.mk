@@ -2,7 +2,7 @@
 # Rules.mk
 #
 # Circle - A C++ bare metal environment for Raspberry Pi
-# Copyright (C) 2014-2023  R. Stange <rsta2@o2online.de>
+# Copyright (C) 2014-2025  R. Stange <rsta2@gmx.net>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-CIRCLEVER = 450100
+CIRCLEVER = 490001
 
 CIRCLEHOME ?= ..
 
@@ -50,7 +50,7 @@ FLOAT_ABI ?= hard
 # set this to 1 to enable garbage collection on sections, may cause side effects
 GC_SECTIONS ?= 0
 
-# set this to 1 to gzip-compress the kernel
+# set this to 1 to gzip-compress the kernel (AArch64 only)
 GZIP_KERNEL ?= 0
 
 ifneq ($(strip $(CLANG)),1)
@@ -111,8 +111,12 @@ else ifeq ($(strip $(RASPPI)),4)
 ARCHCPU	?= -mcpu=cortex-a72 -mlittle-endian
 ARCH	+= -DAARCH=64 $(ARCHCPU)
 TARGET	?= kernel8-rpi4
+else ifeq ($(strip $(RASPPI)),5)
+ARCHCPU	?= -mcpu=cortex-a76 -mlittle-endian
+ARCH	+= -DAARCH=64 $(ARCHCPU)
+TARGET	?= kernel_2712
 else
-$(error RASPPI must be set to 3 or 4)
+$(error RASPPI must be set to 3, 4 or 5)
 endif
 PREFIX	= $(PREFIX64)
 LOADADDR = 0x80000
@@ -159,6 +163,12 @@ endif
 
 OPTIMIZE ?= -O2
 STANDARD ?= -std=c++14 -Wno-aligned-new
+C_STANDARD ?= -std=gnu99
+WARNINGS ?= -Wall
+
+ifeq ($(strip $(CLANG)),1)
+WARNINGS += -Wno-vla-cxx-extension
+endif
 
 INCLUDE	+= -I $(CIRCLEHOME)/include -I $(CIRCLEHOME)/addon -I $(CIRCLEHOME)/app/lib \
 	   -I $(CIRCLEHOME)/addon/vc4 -I $(CIRCLEHOME)/addon/vc4/interface/khronos/include
@@ -166,12 +176,19 @@ DEFINE	+= -D__circle__=$(CIRCLEVER) -DRASPPI=$(RASPPI) -DSTDLIB_SUPPORT=$(STDLIB
 	   -D__VCCOREVER__=0x04000000 -U__unix__ -U__linux__ #-DNDEBUG
 
 AFLAGS	+= $(ARCH) $(DEFINE) $(INCLUDE) $(OPTIMIZE)
-CFLAGS	+= $(ARCH) -Wall -fsigned-char -ffreestanding -g \
+CFLAGS	+= $(ARCH) $(WARNINGS) -fsigned-char -g \
 	   $(DEFINE) $(INCLUDE) $(EXTRAINCLUDE) $(OPTIMIZE)
 CPPFLAGS+= $(CFLAGS) $(STANDARD)
 
+ifneq ($(filter 0 1,$(STDLIB_SUPPORT)),)
+CFLAGS += -ffreestanding
+endif
+
 ifneq ($(strip $(CLANG)),1)
 LDFLAGS	+= --section-start=.init=$(LOADADDR)
+ifneq ($(strip $(shell $(LD) --help | grep -F no-warn-rwx-segments | wc -l)),0)
+LDFLAGS	+= --no-warn-rwx-segments
+endif
 else
 LDFLAGS	+= -Wl,--section-start=.init=$(LOADADDR)
 endif
@@ -186,7 +203,7 @@ endif
 
 %.o: %.c
 	@echo "  CC    $@"
-	@$(CC) $(CFLAGS) -std=gnu99 -c -o $@ $<
+	@$(CC) $(CFLAGS) $(C_STANDARD) -c -o $@ $<
 
 %.o: %.cpp
 	@echo "  CPP   $@"
@@ -218,11 +235,13 @@ endif
 	@$(OBJCOPY) $(TARGET).elf -O binary $(TARGET).img
 	@echo -n "  WC    $(TARGET).img => "
 	@wc -c < $(TARGET).img
+ifeq ($(strip $(AARCH)),64)
 ifeq ($(strip $(GZIP_KERNEL)),1)
 	@gzip -9 -f -n $(TARGET).img
 	@mv $(TARGET).img.gz $(TARGET).img
 	@echo -n "  GZIP  $(TARGET).img => "
 	@wc -c < $(TARGET).img
+endif
 endif
 
 clean:
@@ -258,7 +277,7 @@ $(TARGET).hex: $(TARGET).img
 # of these commands.  If putty and node are available on the windows 
 # machine we can get around WSL's lack of serial port support
 ifeq ($(strip $(WSL_DISTRO_NAME)),)
-NODE=node 
+NODE=node
 PUTTY=putty
 PUTTYSERIALPORT=$(SERIALPORT)
 else
@@ -279,8 +298,16 @@ endif
 else
 
 # Flash with flashy
+ifeq ($(strip $(USEFLASHY)),1)
+	FLASHY ?= $(NODE) $(CIRCLEHOME)/tools/flashy/flashy.js
+else ifeq ($(strip $(USEFLASHY)),0)
+	FLASHY ?= $(CIRCLEHOME)/tools/cflashy
+else
+	FLASHY ?= flashy
+endif
+
 flash: $(TARGET).hex
-	$(NODE) $(CIRCLEHOME)/tools/flashy/flashy.js \
+	$(FLASHY) \
 		$(SERIALPORT) \
 		--flashBaud:$(FLASHBAUD) \
 		--userBaud:$(USERBAUD) \
@@ -297,4 +324,4 @@ monitor:
 # Monitor in terminal (Linux only)
 cat:
 	stty -F $(SERIALPORT) $(USERBAUD) cs8 -cstopb -parenb -icrnl
-	cat $(SERIALPORT)
+	tail -f $(SERIALPORT)

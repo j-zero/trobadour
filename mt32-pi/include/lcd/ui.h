@@ -55,8 +55,6 @@ public:
 
 	static u8 CenterMessageOffset(CLCD& LCD, const char* pMessage);
 	static void DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannelLevels, float* pPeakLevels, u8 nChannels, bool bDrawBarBases);
-	static void DrawHeader(CLCD& LCD, u8 Volume, const char* PresetName, int channel, int bank_num, int preset_num);
-	//static void DrawChannelLevels(CLCD& LCD, u8 nBarHeight, float* pChannelLevels, float* pPeakLevels, u8 nChannels, bool bDrawBarBases, const char* pText);
 
 private:
 	enum class TState
@@ -80,7 +78,6 @@ private:
 	static void DrawChannelLevelsGraphical(CLCD& LCD, u8 nBarOffsetX, u8 nBarYOffset, u8 nBarWidth, u8 nBarHeight, u8 nBarSpacing, const float* pChannelLevels, const float* pPeakLevels, u8 nChannels, bool bDrawBarBases);
 
 	static constexpr size_t SystemMessageTextBufferSize = 256;
-	static constexpr size_t HeaderTextBufferSize = 128;
 	static constexpr size_t SyxExTextBufferSize = 32 + 1;
 	static constexpr size_t SysExPixelBufferSize = 64;
 
@@ -96,8 +93,6 @@ private:
 	size_t m_nCurrentSpinnerChar;
 	TImage m_CurrentImage;
 	char m_SystemMessageTextBuffer[SystemMessageTextBufferSize];
-	char m_HeaderTextBuffer[HeaderTextBufferSize];
-
 	TSysExDisplayMessage m_SysExDisplayMessageType;
 	char m_SysExTextBuffer[SyxExTextBufferSize];
 	u8 m_SysExPixelBuffer[SysExPixelBufferSize];

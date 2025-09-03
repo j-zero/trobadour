@@ -4,7 +4,7 @@
 // Configurable system options
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2022  R. Stange <rsta2@o2online.de>
+// Copyright (C) 2014-2025  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -38,6 +38,13 @@
 #define KERNEL_MAX_SIZE		(2 * MEGABYTE)
 #endif
 
+// KERNEL_STACK_SIZE is the size of the stack set on startup for the
+// main thread.  This must be a multiple of 16 KByte.
+
+#ifndef KERNEL_STACK_SIZE
+#define KERNEL_STACK_SIZE	0x20000
+#endif
+
 // HEAP_DEFAULT_NEW defines the default heap to be used for the "new"
 // operator, if a memory type is not explicitly specified. Possible
 // values are HEAP_LOW (memory below 1 GByte), HEAP_HIGH (memory above
@@ -46,7 +53,7 @@
 // a virtually unified heap, which uses the whole available memory
 // space. Because this may cause problems with some devices, which
 // explicitly need low memory for DMA, this value defaults to HEAP_LOW.
-// This setting is only of importance for the Raspberry Pi 4.
+// This setting is only of importance for the Raspberry Pi 4 and 5.
 
 #ifndef HEAP_DEFAULT_NEW
 #define HEAP_DEFAULT_NEW	HEAP_LOW
@@ -56,7 +63,7 @@
 // calloc() calls. See the description of HEAP_DEFAULT_NEW for details!
 // Modifying this setting is not recommended, because there are device
 // drivers, which require to allocate low memory for DMA purpose using
-// malloc(). This setting is only of importance for the Raspberry Pi 4.
+// malloc(). This setting is only of importance for the Raspberry Pi 4 and 5.
 
 #ifndef HEAP_DEFAULT_MALLOC
 #define HEAP_DEFAULT_MALLOC	HEAP_LOW
@@ -128,7 +135,7 @@
 
 ///////////////////////////////////////////////////////////////////////
 //
-// Raspberry Pi 2, 3 and 4
+// Raspberry Pi 2, 3, 4 and 5
 //
 ///////////////////////////////////////////////////////////////////////
 
@@ -153,11 +160,11 @@
 #endif
 
 // USE_PHYSICAL_COUNTER enables the use of the CPU internal physical
-// counter, which is only available on the Raspberry Pi 2, 3 and 4. Reading
+// counter, which is only available on the Raspberry Pi 2, 3, 4 and 5. Reading
 // this counter is much faster than reading the BCM2835 system timer
 // counter (which is used without this option). It reduces the I/O load
 // too. For some QEMU versions this is the only supported timer option,
-// for other older QEMU versions it does not work. On the Raspberry Pi 4
+// for other older QEMU versions it does not work. On the Raspberry Pi 4 and 5
 // setting this option is required.
 
 #ifndef NO_PHYSICAL_COUNTER
@@ -166,7 +173,7 @@
 
 #endif
 
-#if RASPPI >= 4
+#if RASPPI == 4
 
 // USE_XHCI_INTERNAL enables the xHCI controller, which is integrated
 // into the BCM2711 SoC. The Raspberry Pi 4 provides two independent
@@ -180,6 +187,18 @@
 // config.txt file too!
 
 //#define USE_XHCI_INTERNAL
+
+#endif
+
+#if RASPPI >= 5
+
+// The left PWM audio output pin is by default GPIO12. The following
+// define moves it to GPIO18. For Raspberry Pi 5 only.
+//#define USE_GPIO18_FOR_LEFT_PWM
+
+// The right PWM audio output pin is by default GPIO13. The following
+// define moves it to GPIO19. For Raspberry Pi 5 only.
+//#define USE_GPIO19_FOR_RIGHT_PWM
 
 #endif
 
@@ -201,7 +220,7 @@
 // should normally be set. Unfortunately this causes a heavily changed
 // system timing, because it triggers up to 8000 IRQs per second. For
 // USB plug-and-play operation this option must be set in any case.
-// This option has no influence on the Raspberry Pi 4.
+// This option has no influence on the Raspberry Pi 4 and 5.
 
 #ifndef NO_USB_SOF_INTR
 #define USE_USB_SOF_INTR
@@ -215,7 +234,7 @@
 // communication problems with some USB devices. If this option is
 // enabled, USE_USB_SOF_INTR will be enabled too, and the FIQ cannot be
 // used for other purposes. This option has no influence on the
-// Raspberry Pi 4.
+// Raspberry Pi 4 and 5.
 
 //#define USE_USB_FIQ
 
@@ -230,8 +249,10 @@
 // over 2 are normally not useful, because the system bus gets congested
 // with it.
 
+#ifndef NO_SCREEN_DMA_BURST_LENGTH
 #ifndef SCREEN_DMA_BURST_LENGTH
 #define SCREEN_DMA_BURST_LENGTH	2
+#endif
 #endif
 
 // CALIBRATE_DELAY activates the calibration of the delay loop. Because
@@ -281,12 +302,57 @@
 #ifndef DEFAULT_KEYMAP
 
 #define DEFAULT_KEYMAP		"DE"
+//#define DEFAULT_KEYMAP		"DV"	// Dvorak layout
 //#define DEFAULT_KEYMAP		"ES"
 //#define DEFAULT_KEYMAP		"FR"
 //#define DEFAULT_KEYMAP		"IT"
 //#define DEFAULT_KEYMAP		"UK"
 //#define DEFAULT_KEYMAP		"US"
 
+#endif
+
+///////////////////////////////////////////////////////////////////////
+//
+// USB gadgets
+//
+///////////////////////////////////////////////////////////////////////
+
+// USB_GADGET_VENDOR_ID is the Vendor ID, which is used for your USB
+// gadgets. Normally new USB Vendor IDs will be assigned by the USB-IF
+// (https://usb.org/getting-vendor-id). For tests a unique free Vendor
+// ID may be used. A list of known Vendor IDs can be found here:
+// http://www.linux-usb.org/usb-ids.html. You must not use the same
+// Vendor/Device ID combination for USB devices with different
+// configurations. Especially on Windows hosts this may lead to
+// malfunction. The default Vendor ID 0x0000 given here, is not a valid
+// ID and will be rejected by the Circle USB gadget driver. You have to
+// define a new one.
+
+#ifndef USB_GADGET_VENDOR_ID
+#define USB_GADGET_VENDOR_ID		0x0000
+#endif
+
+// USB_GADGET_DEVICE_ID_BASE is the base value for the assignment of
+// USB Device IDs for USB gadgets in Circle. Used Device IDs start with
+// USB_GADGET_DEVICE_ID_BASE and end with USB_GADGET_DEVICE_ID_BASE+N-1
+// where N is the number of supported USB gadget devices in Circle.
+// Be sure that there is no collision with other USB devices with the
+// same USB Vendor ID!
+
+#ifndef USB_GADGET_DEVICE_ID_BASE
+#define USB_GADGET_DEVICE_ID_BASE	0x8001
+#endif
+
+#ifndef USB_GADGET_DEVICE_ID_MIDI
+#define USB_GADGET_DEVICE_ID_MIDI	USB_GADGET_DEVICE_ID_BASE
+#endif
+
+#ifndef USB_GADGET_DEVICE_ID_SERIAL_CDC
+#define USB_GADGET_DEVICE_ID_SERIAL_CDC	(USB_GADGET_DEVICE_ID_BASE+1)
+#endif
+
+#ifndef USB_GADGET_DEVICE_ID_MSD
+#define USB_GADGET_DEVICE_ID_MSD	(USB_GADGET_DEVICE_ID_BASE+2)
 #endif
 
 ///////////////////////////////////////////////////////////////////////
@@ -300,7 +366,7 @@
 // a display connected to work, but some can be used without a display
 // available. Historically the screen initialization was working even
 // without a display connected, without returning an error, but
-// especially on the Raspberry Pi 4 this is not the case any more. Here
+// especially on the Raspberry Pi 4 and 5 this is not the case any more. Here
 // it is required to define this option, otherwise the program
 // initialization will fail without notice. In your own headless
 // applications you should just not use the CScreenDevice class instead
@@ -387,6 +453,49 @@
 // Circle images which will run on real Raspberry Pi boards.
 
 //#define USE_QEMU_USB_FIX
+
+// USE_NAK_USB_FIX enables a fix for SetCompleteOnNAK() in no-hub
+// configurations on Raspberry Pi 1-3. It must be defined, when an USB
+// device, which uses Bulk transfers to poll an endpoint has another USB
+// interface with more endpoints, and this USB device is directly
+// connected to the root port (without a hub in-between).
+
+//#define USE_NAK_USB_FIX
+
+///////////////////////////////////////////////////////////////////////
+
+// GNU-C 12.x uses floating point registers for optimization. This may
+// occur anywhere in the code, even in IRQ and FIQ handlers.
+
+#if RASPPI >= 2 && __GNUC__ >= 12
+
+#ifndef SAVE_VFP_REGS_ON_IRQ
+#define SAVE_VFP_REGS_ON_IRQ
+#endif
+
+#ifndef SAVE_VFP_REGS_ON_FIQ
+#define SAVE_VFP_REGS_ON_FIQ
+#endif
+
+// save all VFP regs in exceptionstub.S
+#ifndef __FAST_MATH__
+#define __FAST_MATH__
+#endif
+
+#endif
+
+
+// Sets the name of the "main()" entry point function that will be
+// called by circle after system initialization has completed.
+//
+// 	extern int MAINPROC (void);
+//
+// Can be used by wrapper libraries that need to inject their
+// own startup/shutdown code before calling their client's main().
+
+#ifndef MAINPROC
+#define MAINPROC main
+#endif
 
 ///////////////////////////////////////////////////////////////////////
 

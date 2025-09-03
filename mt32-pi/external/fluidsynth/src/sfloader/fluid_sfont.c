@@ -21,70 +21,6 @@
 #include "fluid_sfont.h"
 #include "fluid_sys.h"
 
-
-#if 0
-void *default_fopen(const char *path)
-{
-    const char* msg;
-    FILE* handle = fluid_file_open(path, &msg);
-
-    if(handle == NULL)
-    {
-        FLUID_LOG(FLUID_ERR, "fluid_sfloader_load(): Failed to open '%s': %s", path, msg);
-    }
-
-    return handle;
-}
-
-int default_fclose(void *handle)
-{
-    return FLUID_FCLOSE((FILE *)handle) == 0 ? FLUID_OK : FLUID_FAILED;
-}
-
-fluid_long_long_t default_ftell(void *handle)
-{
-    return FLUID_FTELL((FILE *)handle);
-}
-
-#ifdef WIN32
-    #define PRIi64 "%I64d"
-#else
-    #define PRIi64 "%lld"
-#endif
-
-int safe_fread(void *buf, fluid_long_long_t count, void *fd)
-{
-    if(FLUID_FREAD(buf, (size_t)count, 1, (FILE *)fd) != 1)
-    {
-        if(feof((FILE *)fd))
-        {
-            FLUID_LOG(FLUID_ERR, "EOF while attempting to read " PRIi64 " bytes", count);
-        }
-        else
-        {
-            FLUID_LOG(FLUID_ERR, "File read failed");
-        }
-
-        return FLUID_FAILED;
-    }
-
-    return FLUID_OK;
-}
-
-int safe_fseek(void *fd, fluid_long_long_t ofs, int whence)
-{
-    if(FLUID_FSEEK((FILE *)fd, ofs, whence) != 0)
-    {
-        FLUID_LOG(FLUID_ERR, "File seek failed with offset = " PRIi64 " and whence = %d", ofs, whence);
-        return FLUID_FAILED;
-    }
-
-    return FLUID_OK;
-}
-
-#undef PRIi64
-#endif
-
 void *default_fopen(const char *path);
 int default_fclose(void *handle);
 fluid_long_long_t default_ftell(void *handle);
@@ -505,7 +441,7 @@ void delete_fluid_preset(fluid_preset_t *preset)
  * @return  The sample on success, NULL otherwise.
  */
 fluid_sample_t *
-new_fluid_sample()
+new_fluid_sample(void)
 {
     fluid_sample_t *sample = NULL;
 
@@ -552,7 +488,7 @@ delete_fluid_sample(fluid_sample_t *sample)
  *
  * @warning Do NOT allocate samples on the stack and assign them to a voice!
  */
-size_t fluid_sample_sizeof()
+size_t fluid_sample_sizeof(void)
 {
     return sizeof(fluid_sample_t);
 }

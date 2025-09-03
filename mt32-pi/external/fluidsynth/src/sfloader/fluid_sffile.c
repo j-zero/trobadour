@@ -669,6 +669,7 @@ static int process_info(SFData *sf, int size)
             sf->version.major = ver;
             READW(sf, ver);
             sf->version.minor = ver;
+            FLUID_LOG(FLUID_DBG, "SF Version: %hu.%hu", sf->version.major, sf->version.minor);
 
             if(sf->version.major < 2)
             {
@@ -710,14 +711,29 @@ static int process_info(SFData *sf, int size)
             sf->romver.major = ver;
             READW(sf, ver);
             sf->romver.minor = ver;
+            FLUID_LOG(FLUID_DBG, "ROM Version: %hu.%hu", sf->version.major, sf->version.minor);
         }
-        else if(chunkid(chunk.id) != UNKN_ID)
+        else
         {
-            if((chunk.id != ICMT_FCC && chunk.size > 256) || (chunk.size > 65536) || (chunk.size % 2))
+            if(chunkid(chunk.id) != UNKN_ID)
             {
-                FLUID_LOG(FLUID_ERR, "INFO sub chunk %.4s has invalid chunk size of %d bytes",
-                          (char*)&chunk.id, chunk.size);
-                return FALSE;
+                if((chunk.id != ICMT_FCC && chunk.size > 256) || (chunk.size > 65536) || (chunk.size % 2))
+                {
+                    FLUID_LOG(FLUID_ERR, "INFO sub chunk %.4s has invalid chunk size of %d bytes",
+                              (char*)&chunk.id, chunk.size);
+                    return FALSE;
+                }
+            }
+            else
+            {
+                /* SF 2.04 specification, section 10.2:
+                 * 10.2 Unknown chunks
+                 * within the INFO-list chunk should simply be ignored.
+                 * Other unknown chunks or sub-chunks are illegal and should be
+                 * treated as structural errors.*/
+                unsigned char *p = (unsigned char *)&chunk.id;
+                FLUID_LOG(FLUID_WARN, "Ignoring unknown chunk ID '%c%c%c%c' in INFO chunk",
+                          p[0], p[1], p[2], p[3]);
             }
 
             /* alloc for chunk fcc and da chunk */
@@ -740,11 +756,6 @@ static int process_info(SFData *sf, int size)
 
             /* force terminate info item */
             item.chr[chunk.size] = '\0';
-        }
-        else
-        {
-            FLUID_LOG(FLUID_ERR, "Invalid chunk id in INFO chunk");
-            return FALSE;
         }
 
         size -= chunk.size;
@@ -2219,21 +2230,23 @@ static int fluid_sffile_read_wav(SFData *sf, unsigned int start, unsigned int en
         goto error_exit;
     }
 
+    fluid_rec_mutex_lock(sf->mtx);
+
     /* Load 16-bit sample data */
     if(sf->fcbs->fseek(sf->sffd, sf->samplepos + (start * sizeof(short)), SEEK_SET) == FLUID_FAILED)
     {
         FLUID_LOG(FLUID_ERR, "Failed to seek to sample position");
-        goto error_exit;
+        goto error_exit_unlock;
     }
 
     loaded_data = FLUID_ARRAY(short, num_samples);
-
     if(loaded_data == NULL)
     {
         FLUID_LOG(FLUID_ERR, "Out of memory");
-        goto error_exit;
+        goto error_exit_unlock;
     }
 
+    FLUID_LOG(FLUID_DBG, "ftell(): %llu, fread(): %ld bytes", sf->fcbs->ftell(sf->sffd), num_samples*sizeof(short));
     if(sf->fcbs->fread(loaded_data, num_samples * sizeof(short), sf->sffd) == FLUID_FAILED)
     {
 #if FLUID_VERSION_CHECK(FLUIDSYNTH_VERSION_MAJOR, FLUIDSYNTH_VERSION_MINOR, FLUIDSYNTH_VERSION_MICRO) < FLUID_VERSION_CHECK(2,2,0)
@@ -2245,8 +2258,10 @@ static int fluid_sffile_read_wav(SFData *sf, unsigned int start, unsigned int en
         }
 #endif
         FLUID_LOG(FLUID_ERR, "Failed to read sample data");
-        goto error_exit;
+        goto error_exit_unlock;
     }
+
+    fluid_rec_mutex_unlock(sf->mtx);
 
     /* If this machine is big endian, byte swap the 16 bit samples */
     if(FLUID_IS_BIG_ENDIAN)
@@ -2272,37 +2287,44 @@ static int fluid_sffile_read_wav(SFData *sf, unsigned int start, unsigned int en
             goto error24_exit;
         }
 
-        if(sf->fcbs->fseek(sf->sffd, sf->sample24pos + start, SEEK_SET) == FLUID_FAILED)
-        {
-            FLUID_LOG(FLUID_ERR, "Failed to seek position for 24-bit sample data in data file");
-            goto error24_exit;
-        }
-
         loaded_data24 = FLUID_ARRAY(char, num_samples);
-
         if(loaded_data24 == NULL)
         {
             FLUID_LOG(FLUID_ERR, "Out of memory reading 24-bit sample data");
             goto error24_exit;
         }
 
+        fluid_rec_mutex_lock(sf->mtx);
+
+        if(sf->fcbs->fseek(sf->sffd, sf->sample24pos + start, SEEK_SET) == FLUID_FAILED)
+        {
+            FLUID_LOG(FLUID_ERR, "Failed to seek position for 24-bit sample data in data file");
+            goto error24_exit_unlock;
+        }
+
         if(sf->fcbs->fread(loaded_data24, num_samples, sf->sffd) == FLUID_FAILED)
         {
             FLUID_LOG(FLUID_ERR, "Failed to read 24-bit sample data");
-            goto error24_exit;
+            goto error24_exit_unlock;
         }
+
+        fluid_rec_mutex_unlock(sf->mtx);
     }
 
     *data24 = loaded_data24;
 
     return num_samples;
 
+error24_exit_unlock:
+    fluid_rec_mutex_unlock(sf->mtx);
 error24_exit:
     FLUID_LOG(FLUID_WARN, "Ignoring 24-bit sample data, sound quality might suffer");
     FLUID_FREE(loaded_data24);
     *data24 = NULL;
     return num_samples;
 
+error_exit_unlock:
+    fluid_rec_mutex_unlock(sf->mtx);
 error_exit:
     FLUID_FREE(loaded_data);
     FLUID_FREE(loaded_data24);
@@ -2499,6 +2521,12 @@ static int fluid_sffile_read_vorbis(SFData *sf, unsigned int start_byte, unsigne
         FLUID_LOG(FLUID_ERR, "Out of memory");
         goto error_exit;
     }
+
+    // Avoid clipping for loud samples, see
+    // https://github.com/FluidSynth/fluidsynth/issues/1380
+    // and
+    // https://github.com/libsndfile/libsndfile/issues/194
+    sf_command(sndfile, SFC_SET_SCALE_FLOAT_INT_READ, NULL, SF_TRUE);
 
     /* Automatically decompresses the Ogg Vorbis data to 16-bit PCM */
     if(sf_readf_short(sndfile, wav_data, sfinfo.frames) < sfinfo.frames)

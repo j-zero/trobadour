@@ -35,8 +35,7 @@
 
 #define MT32_PI_NAME "mt32-pi"
 LOGMODULE(MT32_PI_NAME);
-//const char MT32PiFullName[] = MT32_PI_NAME " " MT32_PI_VERSION;
-const char MT32PiFullName[] = "Trobadour";
+const char MT32PiFullName[] = MT32_PI_NAME " " MT32_PI_VERSION;
 
 const char WLANFirmwarePath[] = "SD:firmware/";
 const char WLANConfigFile[]   = "SD:wpa_supplicant.conf";
@@ -59,7 +58,8 @@ enum class TCustomSysExCommand : u8
 
 CMT32Pi* CMT32Pi::s_pThis = nullptr;
 
-CMT32Pi::CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSystem* pInterrupt, CGPIOManager* pGPIOManager, CSerialDevice* pSerialDevice, CUSBHCIDevice* pUSBHCI) : CMultiCoreSupport(CMemorySystem::Get()),
+CMT32Pi::CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSystem* pInterrupt, CGPIOManager* pGPIOManager, CSerialDevice* pSerialDevice, CUSBHCIDevice* pUSBHCI)
+	: CMultiCoreSupport(CMemorySystem::Get()),
 	  CMIDIParser(),
 
 	  m_pConfig(CConfig::Get()),
@@ -101,8 +101,7 @@ CMT32Pi::CMT32Pi(CI2CMaster* pI2CMaster, CSPIMaster* pSPIMaster, CInterruptSyste
 
 	  m_bSerialMIDIAvailable(false),
 	  m_bSerialMIDIEnabled(false),
-	  m_pUSBMIDIDevice1(nullptr),
-	  m_pUSBMIDIDevice2(nullptr),
+	  m_pUSBMIDIDevice(nullptr),
 	  m_pUSBSerialDevice(nullptr),
 	  m_pUSBMassStorageDevice(nullptr),
 
@@ -163,13 +162,13 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 			CLogger::Get()->RegisterPanicHandler(PanicHandler);
 
 			// Splash screen
-			//if (m_pLCD->GetType() == CLCD::TType::Graphical && !m_pConfig->SystemVerbose)
-			//	m_pLCD->DrawImage(TImage::MT32PiLogo, true);
-			//else
-			//{
+			if (m_pLCD->GetType() == CLCD::TType::Graphical && !m_pConfig->SystemVerbose)
+				m_pLCD->DrawImage(TImage::MT32PiLogo, true);
+			else
+			{
 				const u8 nOffsetX = CUserInterface::CenterMessageOffset(*m_pLCD, MT32PiFullName);
 				m_pLCD->Print(MT32PiFullName, nOffsetX, 0, false, true);
-			//}
+			}
 		}
 		else
 		{
@@ -270,10 +269,10 @@ bool CMT32Pi::Initialize(bool bSerialMIDIAvailable)
 		m_pControl = nullptr;
 	}
 
-	//LCDLog(TLCDLogType::Startup, "Init mt32emu");
-	//InitMT32Synth();
+	LCDLog(TLCDLogType::Startup, "Init mt32emu");
+	InitMT32Synth();
 
-	LCDLog(TLCDLogType::Startup, "Loading FluidSynth");
+	LCDLog(TLCDLogType::Startup, "Init FluidSynth");
 	InitSoundFontSynth();
 
 	// Set initial synthesizer
@@ -524,9 +523,27 @@ void CMT32Pi::UITask()
 		{
 			m_UserInterface.Update(*m_pLCD, *m_pCurrentSynth, nTicks);
 			m_nLCDUpdateTime = nTicks;
-			//m_pSoundFontSynth->GetSoundFontIndex();
 		}
 
+		// Poll MiSTer interface
+		if (bMisterEnabled && (nTicks - m_nMisterUpdateTime) >= Utility::MillisToTicks(MisterUpdatePeriodMillis))
+		{
+			TMisterStatus Status{TMisterSynth::Unknown, 0xFF, 0xFF};
+
+			if (m_pCurrentSynth == m_pMT32Synth)
+				Status.Synth = TMisterSynth::MT32;
+			else if (m_pCurrentSynth == m_pSoundFontSynth)
+				Status.Synth = TMisterSynth::SoundFont;
+
+			if (m_pMT32Synth)
+				Status.MT32ROMSet = static_cast<u8>(m_pMT32Synth->GetROMSet());
+
+			if (m_pSoundFontSynth)
+				Status.SoundFontIndex = m_pSoundFontSynth->GetSoundFontIndex();
+
+			m_MisterControl.Update(Status);
+			m_nMisterUpdateTime = nTicks;
+		}
 	}
 
 	// Clear screen
@@ -807,18 +824,11 @@ void CMT32Pi::UpdateUSB(bool bStartup)
 	}
 	m_pUSBMassStorageDevice = pUSBMassStorageDevice;
 
-	if (!m_pUSBMIDIDevice1 && (m_pUSBMIDIDevice1 = static_cast<CUSBMIDIDevice*>(CDeviceNameService::Get()->GetDevice("umidi1", FALSE))))
+	if (!m_pUSBMIDIDevice && (m_pUSBMIDIDevice = static_cast<CUSBMIDIDevice*>(CDeviceNameService::Get()->GetDevice("umidi1", FALSE))))
 	{
-		m_pUSBMIDIDevice1->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBMIDIDevice1);
-		m_pUSBMIDIDevice1->RegisterPacketHandler(USBMIDIPacketHandler1);
-		LOGNOTE("Using USB MIDI interface1");
-		m_bSerialMIDIEnabled = false;
-	}
-	else if (!m_pUSBMIDIDevice2 && (m_pUSBMIDIDevice2 = static_cast<CUSBMIDIDevice*>(CDeviceNameService::Get()->GetDevice("umidi2", FALSE))))
-	{
-		m_pUSBMIDIDevice2->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBMIDIDevice2);
-		m_pUSBMIDIDevice2->RegisterPacketHandler(USBMIDIPacketHandler2);
-		LOGNOTE("Using USB MIDI interface2");
+		m_pUSBMIDIDevice->RegisterRemovedHandler(USBMIDIDeviceRemovedHandler, &m_pUSBMIDIDevice);
+		m_pUSBMIDIDevice->RegisterPacketHandler(USBMIDIPacketHandler);
+		LOGNOTE("Using USB MIDI interface");
 		m_bSerialMIDIEnabled = false;
 	}
 
@@ -1015,7 +1025,7 @@ void CMT32Pi::ProcessEventQueue()
 			case TEventType::Button:
 				ProcessButtonEvent(Event.Button);
 				break;
-			
+
 			case TEventType::SwitchSynth:
 				SwitchSynth(Event.SwitchSynth.Synth);
 				break;
@@ -1023,14 +1033,14 @@ void CMT32Pi::ProcessEventQueue()
 			case TEventType::SwitchMT32ROMSet:
 				SwitchMT32ROMSet(Event.SwitchMT32ROMSet.ROMSet);
 				break;
-			
+
 			case TEventType::SwitchSoundFont:
 				DeferSwitchSoundFont(Event.SwitchSoundFont.Index);
 				break;
 
 			case TEventType::AllSoundOff:
-				//if (m_pMT32Synth)
-				//	m_pMT32Synth->AllSoundOff();
+				if (m_pMT32Synth)
+					m_pMT32Synth->AllSoundOff();
 				if (m_pSoundFontSynth)
 					m_pSoundFontSynth->AllSoundOff();
 				break;
@@ -1059,39 +1069,41 @@ void CMT32Pi::ProcessButtonEvent(const TButtonEvent& Event)
 
 	if (Event.Button == TButton::Button2 && !Event.bRepeat)
 	{
-		/*
 		// Swap synths
 		if (m_pCurrentSynth == m_pMT32Synth)
 			SwitchSynth(TSynth::SoundFont);
 		else
 			SwitchSynth(TSynth::MT32);
-		*/
 	}
 	else if (Event.Button == TButton::Button1 && !Event.bRepeat)
 	{
-		// Next SoundFont
-		const size_t nSoundFonts = m_pSoundFontSynth->GetSoundFontManager().GetSoundFontCount();
-
-		if (!nSoundFonts)
-			LCDLog(TLCDLogType::Error, "No SoundFonts!");
+		if (m_pCurrentSynth == m_pMT32Synth)
+			NextMT32ROMSet();
 		else
 		{
-			size_t nNextSoundFont;
-			if (m_bDeferredSoundFontSwitchFlag)
-				nNextSoundFont = (m_nDeferredSoundFontSwitchIndex + 1) % nSoundFonts;
+			// Next SoundFont
+			const size_t nSoundFonts = m_pSoundFontSynth->GetSoundFontManager().GetSoundFontCount();
+
+			if (!nSoundFonts)
+				LCDLog(TLCDLogType::Error, "No SoundFonts!");
 			else
 			{
-				// Current SoundFont was probably on a USB stick that has since been removed
-				const size_t nCurrentSoundFont = m_pSoundFontSynth->GetSoundFontIndex();
-				if (nCurrentSoundFont > nSoundFonts)
-					nNextSoundFont = 0;
+				size_t nNextSoundFont;
+				if (m_bDeferredSoundFontSwitchFlag)
+					nNextSoundFont = (m_nDeferredSoundFontSwitchIndex + 1) % nSoundFonts;
 				else
-					nNextSoundFont = (nCurrentSoundFont + 1) % nSoundFonts;
+				{
+					// Current SoundFont was probably on a USB stick that has since been removed
+					const size_t nCurrentSoundFont = m_pSoundFontSynth->GetSoundFontIndex();
+					if (nCurrentSoundFont > nSoundFonts)
+						nNextSoundFont = 0;
+					else
+						nNextSoundFont = (nCurrentSoundFont + 1) % nSoundFonts;
+				}
+
+				DeferSwitchSoundFont(nNextSoundFont);
 			}
-
-			DeferSwitchSoundFont(nNextSoundFont);
 		}
-
 	}
 	else if (Event.Button == TButton::Button3)
 	{
@@ -1253,20 +1265,15 @@ void CMT32Pi::USBMIDIDeviceRemovedHandler(CDevice* pDevice, void* pContext)
 	*pDevicePointer = nullptr;
 
 	// Re-enable serial MIDI if not in-use by logger and no other MIDI devices available
-	if (s_pThis->m_bSerialMIDIAvailable && !(s_pThis->m_pUSBMIDIDevice1 || s_pThis->m_pUSBMIDIDevice2 || s_pThis->m_pUSBSerialDevice || s_pThis->m_pPisound))
+	if (s_pThis->m_bSerialMIDIAvailable && !(s_pThis->m_pUSBMIDIDevice || s_pThis->m_pUSBSerialDevice || s_pThis->m_pPisound))
 	{
 		LOGNOTE("Using serial MIDI interface");
 		s_pThis->m_bSerialMIDIEnabled = true;
 	}
 }
 
-// The following handlers are called from interrupt context, enqueuUSBMIDIPacketHandlere into ring buffer for main thread
-void CMT32Pi::USBMIDIPacketHandler1(unsigned nCable, u8* pPacket, unsigned nLength)
-{
-	IRQMIDIReceiveHandler(pPacket, nLength);
-}
 // The following handlers are called from interrupt context, enqueue into ring buffer for main thread
-void CMT32Pi::USBMIDIPacketHandler2(unsigned nCable, u8* pPacket, unsigned nLength)
+void CMT32Pi::USBMIDIPacketHandler(unsigned nCable, u8* pPacket, unsigned nLength)
 {
 	IRQMIDIReceiveHandler(pPacket, nLength);
 }

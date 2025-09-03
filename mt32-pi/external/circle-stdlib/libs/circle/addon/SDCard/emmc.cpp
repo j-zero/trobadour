@@ -95,7 +95,7 @@
 // Required for QEMU
 #define EMMC_ALLOW_OLD_SDHCI
 
-#if RASPPI <= 3
+#if RASPPI != 4
 	#define EMMC_BASE	ARM_EMMC_BASE
 #else
 	#define EMMC_BASE	ARM_EMMC2_BASE
@@ -487,6 +487,7 @@ CEMMCDevice::CEMMCDevice (CInterruptSystem *pInterruptSystem, CTimer *pTimer, CA
 #else
 	m_hci_ver (0),
 #endif
+	m_capacity ((u64) -1),
 	m_pSCR (0)
 {
 	assert (m_pInterruptSystem != 0);
@@ -497,7 +498,7 @@ CEMMCDevice::CEMMCDevice (CInterruptSystem *pInterruptSystem, CTimer *pTimer, CA
 
 #ifndef USE_SDHOST
 
-#if RASPPI >= 2
+#if RASPPI >= 2 && RASPPI <= 4
 	// workaround if bootloader does not restore GPIO modes
 	if (   CMachineInfo::Get ()->GetMachineModel () == MachineModel3B
 	    || CMachineInfo::Get ()->GetMachineModel () == MachineModel3APlus
@@ -536,7 +537,7 @@ CEMMCDevice::~CEMMCDevice (void)
 boolean CEMMCDevice::Initialize (void)
 {
 #ifndef USE_SDHOST
-#if RASPPI >= 4
+#if RASPPI == 4
 	// disable 1.8V supply
 	CBcmPropertyTags Tags;
 	TPropertyTagGPIOState GPIOState;
@@ -663,7 +664,14 @@ u64 CEMMCDevice::Seek (u64 ullOffset)
 	return m_ullOffset;
 }
 
+u64 CEMMCDevice::GetSize (void) const
+{
+	return m_capacity;
+}
+
 #ifndef USE_SDHOST
+
+#if RASPPI <= 4
 
 int CEMMCDevice::PowerOn (void)
 {
@@ -683,6 +691,8 @@ int CEMMCDevice::PowerOn (void)
 	return 0;
 }
 
+#endif
+
 void CEMMCDevice::PowerOff (void)
 {
 	// Power off the SD card
@@ -695,7 +705,7 @@ void CEMMCDevice::PowerOff (void)
 u32 CEMMCDevice::GetBaseClock (void)
 {
 	u32 nClockRate;
-#if RASPPI <= 3
+#if RASPPI != 4
 	nClockRate = CMachineInfo::Get ()->GetClockRate (CLOCK_ID_EMMC);
 #else
 	nClockRate = CMachineInfo::Get ()->GetClockRate (CLOCK_ID_EMMC2);
@@ -1383,6 +1393,33 @@ boolean CEMMCDevice::IssueCommand (u32 command, u32 argument, int timeout)
 	return m_last_cmd_success;
 }
 
+#ifndef USE_EMBEDDED_MMC_CM
+
+u32 CEMMCDevice::GetCSDField (unsigned start, unsigned width) const
+{
+#ifndef USE_SDHOST
+	// TODO: For unknown reason the CRC is not included in the response in EMMC_RESP0
+	// for the SEND_CSD command. This is a workaround to handle this.
+	assert (start >= 8);
+	start -= 8;
+#endif
+
+	unsigned offset = start / 32;
+	unsigned shift = start & 31;
+
+	u32 result = m_csd[offset] >> shift;
+	if (width + shift > 32)
+	{
+		result |= m_csd[offset + 1] << ((32 - shift) % 32);
+	}
+
+	result &= (width < 32 ? 1 << width : 0) - 1;
+
+	return result;
+}
+
+#endif
+
 int CEMMCDevice::CardReset (void)
 {
 #ifndef USE_SDHOST
@@ -1458,11 +1495,16 @@ int CEMMCDevice::CardReset (void)
 
 		return -1;
 	}
+	control1 &= ~(0x3FF << 6);
 	control1 |= f_id;
 
 	// was not masked out and or'd with (7 << 16) in original driver
 	control1 &= ~(0xF << 16);
+#if RASPPI <= 4
 	control1 |= (11 << 16);		// data timeout = TMCLK * 2^24
+#else
+	control1 |= (12 << 16);		// data timeout = TMCLK * 2^25
+#endif
 
 	write32 (EMMC_CONTROL1, control1);
 
@@ -1515,6 +1557,11 @@ int CEMMCDevice::CardReset (void)
 	m_device_id[1] = 0;
 	m_device_id[2] = 0;
 	m_device_id[3] = 0;
+
+	m_csd[0] = 0;
+	m_csd[1] = 0;
+	m_csd[2] = 0;
+	m_csd[3] = 0;
 
 	m_card_supports_sdhc = 0;
 	m_card_supports_hs = 0;
@@ -1889,6 +1936,46 @@ int CEMMCDevice::CardReset (void)
 	LogWrite (LogDebug, "RCA: %04x", m_card_rca);
 #endif
 
+#ifndef USE_EMBEDDED_MMC_CM
+	// Send CMD9 to get the cards CSD
+	if (!IssueCommand (SEND_CSD, m_card_rca << 16))
+	{
+		LogWrite (LogError, "error sending CMD9");
+
+		return -1;
+	}
+	m_csd[0] = m_last_r0;
+	m_csd[1] = m_last_r1;
+	m_csd[2] = m_last_r2;
+	m_csd[3] = m_last_r3;
+#ifdef EMMC_DEBUG2
+	LogWrite (LogDebug, "Card CSD: %08x%08x%08x%08x", m_csd[3], m_csd[2], m_csd[1], m_csd[0]);
+#endif
+
+	// Calculate device capacity
+	unsigned nSize, nShift;
+	unsigned nCSDVersion = GetCSDField (126, 2);
+	if (nCSDVersion == 0)
+	{
+		nSize = GetCSDField (62, 12) + 1;
+		nShift = GetCSDField (47, 3) + 2;
+	}
+	else if (nCSDVersion == 1)
+	{
+		nSize = GetCSDField (48, 22) + 1;
+		nShift = 10;
+	}
+	else
+	{
+		LogWrite (LogError, "Unknown CSD version %u", nCSDVersion);
+
+		return -1;
+	}
+
+	m_capacity = (u64) (nSize << nShift) * SD_BLOCK_SIZE;
+	LogWrite (LogDebug, "Capacity is %lu MBytes", m_capacity / 0x100000);
+#endif	// #ifndef USE_EMBEDDED_MMC_CM
+
 	// Now select the card (toggles it to transfer state)
 	if (!IssueCommand (SELECT_CARD, m_card_rca << 16))
 	{
@@ -2147,7 +2234,7 @@ int CEMMCDevice::CardReset (void)
 
 int CEMMCDevice::CardInit (void)
 {
-#ifndef USE_SDHOST
+#if RASPPI <= 4 && !defined (USE_SDHOST)
 	if(PowerOn () != 0)
 	{
 		LogWrite (LogError, "BCM2708 controller did not power on successfully");
@@ -2432,7 +2519,7 @@ int CEMMCDevice::DoWrite (u8 *buf, size_t buf_size, u32 block_no)
 
 #ifndef USE_SDHOST
 
-int CEMMCDevice::TimeoutWait (unsigned reg, unsigned mask, int value, unsigned usec)
+int CEMMCDevice::TimeoutWait (unsigned long reg, unsigned mask, int value, unsigned usec)
 {
 	assert (m_pTimer != 0);
 	unsigned nStartTicks = m_pTimer->GetClockTicks ();
