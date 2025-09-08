@@ -12,7 +12,7 @@ fi
 $make $1 $2 || exit
 
 cd hostap/wpa_supplicant
-$make -f Makefile.circle $1 $2 || exit
+$make -f Makefile $1 $2 || exit
 cd ../..
 
 if [[ $makesample == true ]]
