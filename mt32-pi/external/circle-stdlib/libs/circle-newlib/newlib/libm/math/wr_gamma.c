@@ -27,7 +27,23 @@
 	double x; int *signgamp;
 #endif
 {
-	return lgamma_r(x, signgamp);
+#ifdef _IEEE_LIBM
+	return __ieee754_gamma_r(x,signgamp);
+#else
+        double y;
+        y = __ieee754_gamma_r(x,signgamp);
+        if(_LIB_VERSION == _IEEE_) return y;
+        if(!finite(y)&&finite(x)) {
+	    if(floor(x)==x&&x<=0.0)
+	      /* gamma(-integer) or gamma(0) */
+	      errno = EDOM;
+	    else
+	      /* gamma(finite) overflow */
+	      errno = ERANGE;
+	    return HUGE_VALF;
+        } else
+            return y;
+#endif
 }
 
 #endif /* defined(_DOUBLE_IS_32BITS) */

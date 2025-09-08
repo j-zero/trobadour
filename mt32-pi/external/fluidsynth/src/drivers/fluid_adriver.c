@@ -13,8 +13,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA
  */
 
 #include "fluid_adriver.h"
@@ -196,6 +197,16 @@ static const fluid_audriver_definition_t fluid_audio_drivers[] =
         NULL,
         delete_fluid_sdl3_audio_driver,
         fluid_sdl3_audio_driver_settings
+    },
+#endif
+
+#if SDL2_SUPPORT
+    {
+        "sdl2",
+        new_fluid_sdl2_audio_driver,
+        NULL,
+        delete_fluid_sdl2_audio_driver,
+        fluid_sdl2_audio_driver_settings
     },
 #endif
 

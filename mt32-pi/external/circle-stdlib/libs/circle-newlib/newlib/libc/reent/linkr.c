@@ -51,7 +51,7 @@ _link_r (struct _reent *ptr,
 
   errno = 0;
   if ((ret = _link (old, new)) == -1 && errno != 0)
-    _REENT_ERRNO(ptr) = errno;
+    ptr->_errno = errno;
   return ret;
 }
 

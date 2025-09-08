@@ -14,7 +14,6 @@
  */
 
 #include "fdlibm.h"
-#include "math_config.h"
 
 #if __OBSOLETE_MATH
 #ifdef __v810__
@@ -62,9 +61,9 @@ P5   =  4.1381369442e-08; /* 0x3331bb4c */
         if(FLT_UWORD_IS_INFINITE(hx))
 	    return (xsb==0)? x:0.0;		/* exp(+-inf)={inf,0} */
 	if(sx > FLT_UWORD_LOG_MAX)
-	    return __math_oflowf(0); /* overflow */
+	    return huge*huge; /* overflow */
 	if(sx < 0 && hx > FLT_UWORD_LOG_MIN)
-	    return __math_uflowf(0); /* underflow */
+	    return twom100*twom100; /* underflow */
 	
     /* argument reduction */
 	if(hx > 0x3eb17218) {		/* if  |x| > 0.5 ln2 */ 
@@ -78,7 +77,7 @@ P5   =  4.1381369442e-08; /* 0x3331bb4c */
 	    }
 	    x  = hi - lo;
 	} 
-	else if(hx < 0x34000000)  {	/* when |x|<2**-23 */
+	else if(hx < 0x31800000)  {	/* when |x|<2**-28 */
 	    if(huge+x>one) return one+x;/* trigger inexact */
 	}
 

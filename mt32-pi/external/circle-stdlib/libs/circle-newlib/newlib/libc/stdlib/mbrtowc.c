@@ -7,10 +7,6 @@
 #include <string.h>
 #include "local.h"
 
-#ifdef _REENT_THREAD_LOCAL
-_Thread_local _mbstate_t _tls_mbrtowc_state;
-#endif
-
 size_t
 _mbrtowc_r (struct _reent *ptr,
 	wchar_t *pwc,
@@ -36,7 +32,7 @@ _mbrtowc_r (struct _reent *ptr,
   if (retval == -1)
     {
       ps->__count = 0;
-      _REENT_ERRNO(ptr) = EILSEQ;
+      ptr->_errno = EILSEQ;
       return (size_t)(-1);
     }
   else
@@ -72,7 +68,7 @@ mbrtowc (wchar_t *__restrict pwc,
   if (retval == -1)
     {
       ps->__count = 0;
-      _REENT_ERRNO(reent) = EILSEQ;
+      reent->_errno = EILSEQ;
       return (size_t)(-1);
     }
   else

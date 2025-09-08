@@ -101,8 +101,7 @@ from types import SimpleNamespace
 
 import xml.etree.ElementTree as ET
 
-import framework_scripts_path # pylint: disable=unused-import
-from mbedtls_framework import build_tree
+from mbedtls_dev import build_tree
 
 
 class AbiChecker:
@@ -326,14 +325,8 @@ class AbiChecker:
     @staticmethod
     def _list_generated_test_data_files(git_worktree_path):
         """List the generated test data files."""
-        generate_psa_tests = 'framework/scripts/generate_psa_tests.py'
-        if not os.path.isfile(git_worktree_path + '/' + generate_psa_tests):
-            # The checked-out revision is from before generate_psa_tests.py
-            # was moved to the framework submodule. Use the old location.
-            generate_psa_tests = 'tests/scripts/generate_psa_tests.py'
-
         output = subprocess.check_output(
-            [generate_psa_tests, '--list'],
+            ['tests/scripts/generate_psa_tests.py', '--list'],
             cwd=git_worktree_path,
         ).decode('ascii')
         return [line for line in output.split('\n') if line]
@@ -350,29 +343,17 @@ class AbiChecker:
         """
         # Existing test data files. This may be missing some automatically
         # generated files if they haven't been generated yet.
-        if os.path.isdir(os.path.join(git_worktree_path, 'tf-psa-crypto',
-                                      'tests', 'suites')):
-            storage_data_files = set(glob.glob(
-                'tf-psa-crypto/tests/suites/test_suite_*storage_format*.data'
-            ))
-        else:
-            storage_data_files = set(glob.glob(
-                'tests/suites/test_suite_*storage_format*.data'
-            ))
+        storage_data_files = set(glob.glob(
+            'tests/suites/test_suite_*storage_format*.data'
+        ))
         # Discover and (re)generate automatically generated data files.
         to_be_generated = set()
         for filename in self._list_generated_test_data_files(git_worktree_path):
             if 'storage_format' in filename:
                 storage_data_files.add(filename)
                 to_be_generated.add(filename)
-
-        generate_psa_tests = 'framework/scripts/generate_psa_tests.py'
-        if not os.path.isfile(git_worktree_path + '/' + generate_psa_tests):
-            # The checked-out revision is from before generate_psa_tests.py
-            # was moved to the framework submodule. Use the old location.
-            generate_psa_tests = 'tests/scripts/generate_psa_tests.py'
         subprocess.check_call(
-            [generate_psa_tests] + sorted(to_be_generated),
+            ['tests/scripts/generate_psa_tests.py'] + sorted(to_be_generated),
             cwd=git_worktree_path,
         )
         for test_file in sorted(storage_data_files):

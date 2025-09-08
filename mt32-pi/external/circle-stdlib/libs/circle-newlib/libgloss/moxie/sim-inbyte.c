@@ -14,10 +14,6 @@
  * they apply.
  */
 
-#include <stdlib.h>
-
-#include <unistd.h>
-
 int
 inbyte ()
 {

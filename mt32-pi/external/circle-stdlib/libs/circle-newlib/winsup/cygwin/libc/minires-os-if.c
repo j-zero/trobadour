@@ -69,14 +69,15 @@ static unsigned char * write_record(unsigned char * ptr, PDNS_RECORD rr,
 
   switch(rr->wType) {
   case DNS_TYPE_A:
-  case DNS_TYPE_AAAA:
   {
-    u_int8_t * aptr = rr->wType == DNS_TYPE_A
-      ? (u_int8_t *) & rr->Data.A.IpAddress : (u_int8_t *) & rr->Data.AAAA.Ip6Address;
-    int sz = rr->wType == DNS_TYPE_A ? NS_INADDRSZ/*4*/ : NS_IN6ADDRSZ/*16*/;
-    if (ptr + sz <= EndPtr)
-      memcpy(ptr, aptr, sz);
-    ptr += sz;
+    u_int8_t * aptr = (u_int8_t *) & rr->Data.A.IpAddress;
+    if (ptr + 4 <= EndPtr) {
+      ptr[0] = aptr[0];
+      ptr[1] = aptr[1];
+      ptr[2] = aptr[2];
+      ptr[3] = aptr[3];
+    }
+    ptr += 4;
     break;
   }
   case DNS_TYPE_NS:
@@ -159,13 +160,12 @@ static unsigned char * write_record(unsigned char * ptr, PDNS_RECORD rr,
       PUTSHORT(rr->Data.SRV.wWeight, ptr);
       PUTSHORT(rr->Data.SRV.wPort, ptr);
     }
-    dnptrs = 0;  /* compression not allowed */
     PUTDOMAIN(rr->Data.SRV.pNameTarget, ptr);
     break;
   default:
   {
     unsigned int len = rr->wDataLength;
-    DPRINTF(debug, "No structure for wType %u\n", rr->wType);
+    DPRINTF(debug, "No structure for wType %d\n", rr->wType);
     if (ptr + len <= EndPtr)
       memcpy(ptr, (char *) &rr->Data, len);
     ptr += len;
@@ -190,15 +190,9 @@ static int cygwin_query(res_state statp, const char * DomName, int Class, int Ty
   DWORD section;
   int len, counts[4] = {0, 0, 0, 0}, debug = statp->options & RES_DEBUG;
   unsigned char * dnptrs[256], * ptr;
-  unsigned short Id = 0;
 
   dnptrs[0] = AnsPtr;
   dnptrs[1] = NULL;
-
-  if (AnsLength >= 2)
-    memcpy(&Id, AnsPtr, 2);
-
-  memset(AnsPtr, 0, AnsLength);
 
   if (Class != ns_c_in) {
     errno = ENOSYS;
@@ -216,12 +210,12 @@ static int cygwin_query(res_state statp, const char * DomName, int Class, int Ty
 #define NO_DATA		4 /* Valid name, no data record of requested type */
 #endif
 
-  DPRINTF(debug, "DnsQuery for \"%s\" %d: %u (Windows)\n", DomName, Type, res);
+  DPRINTF(debug, "DnsQuery: %lu (Windows)\n", res);
   if (res) {
     switch (res) {
     case ERROR_INVALID_NAME:
       errno = EINVAL;
-      statp->res_h_errno = NETDB_INTERNAL;
+      statp->res_h_errno = NETDB_INTERNAL;;
       break;
     case ERROR_TIMEOUT:
       statp->res_h_errno = TRY_AGAIN;
@@ -242,11 +236,12 @@ static int cygwin_query(res_state statp, const char * DomName, int Class, int Ty
       statp->res_h_errno = NO_DATA;
       break;
     default:
-      DPRINTF(debug, "Unknown code %u\n", res);
+      DPRINTF(debug, "Unknown code %lu for %s %d\n", res, DomName, Type);
       statp->res_h_errno = NO_RECOVERY;
       break;
     }
-    return -1;
+    len = -1;
+    goto done;
   }
 
   ptr = AnsPtr + HFIXEDSZ; /* Skip header */
@@ -265,10 +260,8 @@ static int cygwin_query(res_state statp, const char * DomName, int Class, int Ty
       /* No question. Adopt the first name as the name in the question */
       if ((len = dn_comp(rr->pName, ptr, AnsLength - 4,
 			 dnptrs, &dnptrs[DIM(dnptrs) - 1])) < 0) {
-	statp->res_h_errno = NETDB_INTERNAL;  /* dn_comp sets errno */
-	AnsLength = 0;
-	len = -1;
-	goto done;
+	ptr = NULL;
+	break;
       }
       ptr += len;
       PUTSHORT(Type, ptr);
@@ -281,10 +274,10 @@ static int cygwin_query(res_state statp, const char * DomName, int Class, int Ty
 
     /* Check the records are in correct section order */
     if ((rr->Flags.DW & 0x3) < section) {
-      DPRINTF(debug, "Unexpected section order for \"%s\" %d\n", DomName, Type);
+      DPRINTF(debug, "Unexpected section order %s %d\n", DomName, Type);
       continue;
     }
-    section = rr->Flags.DW & 0x3;
+    section =  rr->Flags.DW & 0x3;
 
     ptr = write_record(ptr, rr, AnsPtr + AnsLength, dnptrs,
 		       &dnptrs[DIM(dnptrs) - 1], debug);
@@ -293,19 +286,15 @@ static int cygwin_query(res_state statp, const char * DomName, int Class, int Ty
     rr = rr->pNext;
   }
 
-  len = ptr - AnsPtr;
-
-done:
-
   DnsFree(pQueryResultsSet, DnsFreeRecordList);
 
-  if (HFIXEDSZ <= AnsLength) {
-    ptr = AnsPtr;
-    PUTSHORT(Id, ptr);
-    PUTSHORT((QR << 8) + RA + RD, ptr);
-    for (section = 0; section < DIM(counts); section++) {
-      PUTSHORT(counts[section], ptr);
-    }
+  len = ptr - AnsPtr;
+done:
+  ptr = AnsPtr;
+  PUTSHORT(0, ptr); /* Id */
+  PUTSHORT((QR << 8) + RA + RD, ptr);
+  for (section = 0; section < DIM(counts); section++) {
+    PUTSHORT(counts[section], ptr);
   }
   return len;
 }
@@ -335,7 +324,7 @@ static void get_registry_dns_items(PUNICODE_STRING in, res_state statp,
 	     srch++);
 	*srch++ = 0;
 	if (numAddresses < DIM(statp->nsaddr_list)) {
-	  DPRINTF(debug, "registry server \"%s\"\n", ap);
+	  DPRINTF(debug, "server \"%s\"\n", ap);
 	  statp->nsaddr_list[numAddresses].sin_addr.s_addr = cygwin_inet_addr((char *) ap);
 	  if ( statp->nsaddr_list[numAddresses].sin_addr.s_addr != 0 )
 	    numAddresses++;
@@ -366,11 +355,11 @@ static void get_registry_dns(res_state statp)
   NTSTATUS status;
   const PCWSTR keyName = L"Tcpip\\Parameters";
 
-  DPRINTF(statp->options & RES_DEBUG, "key \"%ls\"\n", keyName);
+  DPRINTF(statp->options & RES_DEBUG, "key %s\n", keyName);
   status = RtlCheckRegistryKey (RTL_REGISTRY_SERVICES, keyName);
   if (!NT_SUCCESS (status))
     {
-      DPRINTF (statp->options & RES_DEBUG, "RtlCheckRegistryKey: status 0x%08X\n",
+      DPRINTF (statp->options & RES_DEBUG, "RtlCheckRegistryKey: status %p\n",
 	       status);
       return;
     }
@@ -392,7 +381,7 @@ static void get_registry_dns(res_state statp)
   if (!NT_SUCCESS (status))
     {
       DPRINTF (statp->options & RES_DEBUG,
-	       "RtlQueryRegistryValues: status 0x%08X\n", status);
+	       "RtlQueryRegistryValues: status %p\n", status);
       return;
     }
 
@@ -453,7 +442,7 @@ void get_dns_info(res_state statp)
   /* First call to get the buffer length we need */
   dwRetVal = GetNetworkParams((FIXED_INFO *) 0, &ulOutBufLen);
   if (dwRetVal != ERROR_BUFFER_OVERFLOW) {
-    DPRINTF(debug, "GetNetworkParams: error %u (Windows)\n", dwRetVal);
+    DPRINTF(debug, "GetNetworkParams: error %lu (Windows)\n", dwRetVal);
     goto use_registry;
   }
   if ((pFixedInfo = (FIXED_INFO *) alloca(ulOutBufLen)) == 0) {
@@ -461,7 +450,7 @@ void get_dns_info(res_state statp)
     goto use_registry;
   }
   if ((dwRetVal = GetNetworkParams(pFixedInfo, & ulOutBufLen))) {
-    DPRINTF(debug, "GetNetworkParams: error %u (Windows)\n", dwRetVal);
+    DPRINTF(debug, "GetNetworkParams: error %lu (Windows)\n", dwRetVal);
     goto use_registry;
   }
 
@@ -471,7 +460,7 @@ void get_dns_info(res_state statp)
        pIPAddr;
        pIPAddr = pIPAddr->Next) {
     if (numAddresses < DIM(statp->nsaddr_list)) {
-	DPRINTF(debug, "params server \"%s\"\n", pIPAddr->IpAddress.String);
+	DPRINTF(debug, "server \"%s\"\n", pIPAddr->IpAddress.String);
       statp->nsaddr_list[numAddresses].sin_addr.s_addr = cygwin_inet_addr(pIPAddr->IpAddress.String);
       if (statp->nsaddr_list[numAddresses].sin_addr.s_addr != 0) {
 	numAddresses++;

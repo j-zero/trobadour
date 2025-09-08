@@ -1,9 +1,15 @@
 /*
  * Diffie-Hellman group 5 operations
- * Copyright (c) 2009, 2012, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2009, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -15,16 +21,9 @@
 
 void * dh5_init(struct wpabuf **priv, struct wpabuf **publ)
 {
-	wpabuf_free(*publ);
 	*publ = dh_init(dh_groups_get(5), priv);
-	if (*publ == NULL)
+	if (*publ == 0)
 		return NULL;
-	return (void *) 1;
-}
-
-
-void * dh5_init_fixed(const struct wpabuf *priv, const struct wpabuf *publ)
-{
 	return (void *) 1;
 }
 

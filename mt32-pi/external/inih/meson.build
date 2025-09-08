@@ -1,7 +1,7 @@
 project('inih',
     ['c'],
     license : 'BSD-3-Clause',
-    version : '61',
+    version : '60',
     default_options : ['cpp_std=c++11'],
     meson_version: '>=0.56.0'
 )
@@ -99,9 +99,7 @@ inih_dep = declare_dependency(
     include_directories : inc_inih
 )
 
-if get_option('tests')
-    subdir('tests')
-endif
+subdir('tests')
 
 #### INIReader ####
 if get_option('with_INIReader')

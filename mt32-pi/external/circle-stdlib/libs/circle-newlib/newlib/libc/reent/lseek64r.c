@@ -50,7 +50,7 @@ _lseek64_r (struct _reent *ptr,
 
   errno = 0;
   if ((ret = _lseek64 (fd, pos, whence)) == (_off64_t) -1 && errno != 0)
-    _REENT_ERRNO(ptr) = errno;
+    ptr->_errno = errno;
   return ret;
 }
 

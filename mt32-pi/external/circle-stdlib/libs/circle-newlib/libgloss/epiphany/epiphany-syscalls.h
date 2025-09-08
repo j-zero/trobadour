@@ -35,7 +35,5 @@ int asm_open(const char* FILE, int FLAGS, int MODE);
 void asm_exit(int STATUS);
 int asm_close(int CHAN);
 int asm_syscall(void *P1, void *P2, void *P3, int SUBFUN);
-int _fstat (int, struct stat *st);
-
 
 #endif

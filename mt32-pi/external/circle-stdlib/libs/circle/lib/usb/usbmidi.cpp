@@ -5,7 +5,7 @@
 // 	Copyright (C) 2016  J. Otto <joshua.t.otto@gmail.com>
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2017-2025  R. Stange <rsta2@gmx.net>
+// Copyright (C) 2017-2023  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -88,13 +88,11 @@ boolean CUSBMIDIDevice::SendEventPackets (const u8 *pData, unsigned nLength)
 	return (*m_pSendEventsHandler) (pData, nLength, m_pSendEventsParam);
 }
 
-boolean CUSBMIDIDevice::SendPlainMIDI (unsigned nCable, const u8 *pData, unsigned nLength,
-				       unsigned nChunkSize)
+boolean CUSBMIDIDevice::SendPlainMIDI (unsigned nCable, const u8 *pData, unsigned nLength)
 {
 	assert (nCable <= 15);
 	assert (pData != 0);
 	assert (nLength > 0);
-	assert (nChunkSize % 4 == 0);
 
 	size_t nBufferSize = nLength * 4;		// worst case
 	size_t nBufferValid = 0;
@@ -224,25 +222,7 @@ boolean CUSBMIDIDevice::SendPlainMIDI (unsigned nCable, const u8 *pData, unsigne
 
 	//debug_hexdump (Buffer, nBufferValid, FromMIDI);
 
-	if (nChunkSize == 0)
-	{
-		return SendEventPackets (Buffer, nBufferValid);
-	}
-
-	for (pBuffer = Buffer; nBufferValid > 0; pBuffer += nChunkSize, nBufferValid -= nChunkSize)
-	{
-		if (nChunkSize > nBufferValid)
-		{
-			nChunkSize = nBufferValid;
-		}
-
-		if (!SendEventPackets (pBuffer, nChunkSize))
-		{
-			return FALSE;
-		}
-	}
-
-	return TRUE;
+	return SendEventPackets (Buffer, nBufferValid);
 }
 
 void CUSBMIDIDevice::SetAllSoundOffOnUSBError (boolean bEnable)

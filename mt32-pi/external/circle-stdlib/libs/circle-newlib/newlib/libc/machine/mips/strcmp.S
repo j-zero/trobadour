@@ -31,6 +31,10 @@
 # include "machine/asm.h"
 # include "machine/regdef.h"
 #elif _LIBC
+# include <sysdep.h>
+# include <regdef.h>
+# include <sys/asm.h>
+#elif _COMPILING_NEWLIB
 # include "machine/asm.h"
 # include "machine/regdef.h"
 #else
@@ -250,3 +254,8 @@ L(bexit89):
 	.set	reorder
 
 END(STRCMP_NAME)
+#ifndef ANDROID_CHANGES
+# ifdef _LIBC
+libc_hidden_builtin_def (STRCMP_NAME)
+# endif
+#endif

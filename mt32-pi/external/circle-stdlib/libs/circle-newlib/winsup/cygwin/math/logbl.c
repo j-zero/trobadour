@@ -16,8 +16,7 @@ logbl (long double x)
 {
   long double res = 0.0L;
 
-  asm volatile (
-       "fxtract\n\t"
+  asm ("fxtract\n\t"
        "fstp	%%st" : "=t" (res) : "0" (x));
   return res;
 }

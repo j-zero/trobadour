@@ -26,19 +26,8 @@ _start:
   addi  gp, gp, %pcrel_lo(1b)
 .option pop
 
-  /* Initialize jvt CSR (reg addr: 0x0017) */
-  .weak __jvt_base$
-  lla a0, __jvt_base$
-  beqz a0, .Ljvt_init_end
-.option push
-.option norelax
-.option arch, +zicsr
-  csrw 0x17, a0
-.option pop
-.Ljvt_init_end:
-
   # Clear the bss segment
-  la      a0, __bss_start
+  la      a0, _edata
   la      a2, _end
   sub     a2, a2, a0
   li      a1, 0
@@ -61,9 +50,7 @@ _start:
 
   lw      a0, 0(sp)                  # a0 = argc
   addi    a1, sp, __SIZEOF_POINTER__ # a1 = argv
-  slli    a2, a0, 1 + __SIZEOF_POINTER__ >> 2
-  addi    a2, a2, __SIZEOF_POINTER__
-  add     a2, a2, a1                 # a2 = envp
+  li      a2, 0                      # a2 = envp = NULL
   call    main
   tail    exit
   .size  _start, .-_start

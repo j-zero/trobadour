@@ -21,6 +21,8 @@ details. */
 #include <wctype.h>
 #include <errno.h>
 
+#define _WIN32_WINNT 0x0a00
+#define WINVER 0x0a00
 #define NOCOMATTRIBUTE
 #include <windows.h>
 #include <userenv.h>
@@ -29,11 +31,12 @@ details. */
 #include <ntdll.h>
 
 #include "wide_path.h"
+#include "loadlib.h"
 
 static char *prog_name;
 static char *file_arg, *output_arg;
 static int path_flag, unix_flag, windows_flag, absolute_flag, cygdrive_flag;
-static int shortname_flag, longname_flag, rootlocal_flag;
+static int shortname_flag, longname_flag;
 static int ignore_flag, allusers_flag, output_flag;
 static int mixed_flag, options_from_file_flag, mode_flag;
 static UINT codepage;
@@ -55,7 +58,6 @@ static struct option long_options[] = {
   {(char *) "proc-cygdrive", no_argument, NULL, 'U'},
   {(char *) "short-name", no_argument, NULL, 's'},
   {(char *) "type", required_argument, NULL, 't'},
-  {(char *) "root-local", no_argument, NULL, 'L'},
   {(char *) "unix", no_argument, NULL, 'u'},
   {(char *) "version", no_argument, NULL, 'V'},
   {(char *) "windows", no_argument, NULL, 'w'},
@@ -71,9 +73,9 @@ static struct option long_options[] = {
   {0, no_argument, 0, 0}
 };
 
-static char options[] = "ac:df:hilmMoprst:uUVwAC:DHOPSWF:";
+static char options[] = "ac:df:hilmMopst:uUVwAC:DHOPSWF:";
 
-static void __attribute__ ((__noreturn__))
+static void
 usage (FILE * stream, int status)
 {
   if (!ignore_flag || !status)
@@ -97,15 +99,11 @@ Output type options:\n\
 Path conversion options:\n\
 \n\
   -a, --absolute        output absolute path\n\
-  -l, --long-name       print Windows long form of NAMEs (with -w, -m only,\n\
-                        don't mix with -r and -s)\n\
-  -r, --root-local      print Windows path with root-local path prefix (\\\\?\\,\n\
-                        with -w only, don't mix with -l and -s)\n\
+  -l, --long-name       print Windows long form of NAMEs (with -w, -m only)\n\
   -p, --path            NAME is a PATH list (i.e., '/bin:/usr/bin')\n\
   -U, --proc-cygdrive   Emit /proc/cygdrive path instead of cygdrive prefix\n\
                         when converting Windows path to UNIX path.\n\
-  -s, --short-name      print DOS (short) form of NAMEs (with -w, -m only,\n\
-                        don't mix with -l and -r)\n\
+  -s, --short-name      print DOS (short) form of NAMEs (with -w, -m only)\n\
   -C, --codepage CP     print DOS, Windows, or mixed pathname in Windows\n\
                         codepage CP.  CP can be a numeric codepage identifier,\n\
                         or one of the reserved words ANSI, OEM, or UTF8.\n\
@@ -465,29 +463,6 @@ get_long_name (const char *filename, DWORD& len)
 }
 
 static char *
-get_rootlocal_name (const char *filename, DWORD& len)
-{
-  if (!strncmp (filename, "\\\\?\\", 4))
-    return strdup (filename);
-
-  char *buf = (char *) malloc (strlen (filename) + 7);
-  if (!buf)
-    {
-      fprintf (stderr, "%s: out of memory\n", prog_name);
-      exit (1);
-    }
-
-  char *p = stpcpy (buf, "\\\\?\\");
-  if (!strncmp (filename, "\\\\", 2))
-    {
-      p = stpcpy (p, "UNC");
-      ++filename;
-    }
-  stpcpy (p, filename);
-  return buf;
-}
-
-static char *
 get_long_paths (char *path)
 {
   char *sbuf;
@@ -563,6 +538,7 @@ do_sysfolders (char option)
 {
   WCHAR wbuf[MAX_PATH];
   char buf[PATH_MAX];
+  BOOL iswow64 = FALSE;
 
   wbuf[0] = L'\0';
   switch (option)
@@ -605,6 +581,18 @@ do_sysfolders (char option)
 
     case 'S':
       GetSystemDirectoryW (wbuf, MAX_PATH);
+      if (!windows_flag
+	  && IsWow64Process (GetCurrentProcess (), &iswow64) && iswow64)
+	{
+	  /* When calling NtQueryInformationFile(FileNameInformation) on WOW64,
+	     the returned path will point to SysWOW64.  This breaks path
+	     redirection to the network related files under device/etc.  This
+	     here is a bad hack to make sure that the conversion will convert
+	     the case *and* stick to System32. */
+	  PWCHAR last_bs = wcsrchr (wbuf, L'\\');
+	  if (last_bs)
+	    wcpcpy (last_bs + 1, L"Sysnative");
+	}
       break;
 
     case 'W':
@@ -785,13 +773,8 @@ do_pathconv (char *filename)
 	      buf = get_long_name (tmp = buf, len);
 	      free (tmp);
 	    }
-	  if (rootlocal_flag)
-	    {
-	      buf = get_rootlocal_name (tmp = buf, len);
-	      free (tmp);
-	    }
 	  tmp = buf;
-	  if (!rootlocal_flag && strncmp (buf, "\\\\?\\", 4) == 0)
+	  if (strncmp (buf, "\\\\?\\", 4) == 0)
 	    {
 	      len = 0;
 	      if (buf[5] == ':')
@@ -841,7 +824,6 @@ do_options (int argc, char **argv, int from_file)
   windows_flag = 0;
   shortname_flag = 0;
   longname_flag = 0;
-  rootlocal_flag = 0;
   mixed_flag = 0;
   ignore_flag = 0;
   allusers_flag = 0;
@@ -912,10 +894,6 @@ do_options (int argc, char **argv, int from_file)
 
 	case 's':
 	  shortname_flag = 1;
-	  break;
-
-	case 'r':
-	  rootlocal_flag = 1;
 	  break;
 
 	case 't':
@@ -992,6 +970,7 @@ do_options (int argc, char **argv, int from_file)
 
 	case 'h':
 	  usage (stdout, 0);
+	  break;
 
 	case 'V':
 	  print_version ();
@@ -1018,16 +997,12 @@ do_options (int argc, char **argv, int from_file)
   if (!from_file && options_from_file_flag && !file_arg)
     usage (stderr, 1);
 
-  /* longname, shortname and root-local don't play well together. */
-  if (longname_flag + shortname_flag + rootlocal_flag > 1)
+  /* longname and shortname don't play well together. */
+  if (longname_flag && shortname_flag)
     usage (stderr, 1);
 
-  /* longname, shortname and root-local only make sense with Windows paths. */
-  if ((longname_flag || shortname_flag || rootlocal_flag) && !windows_flag)
-    usage (stderr, 1);
-
-  /* root-local with mixed mode doesn't make sense. */
-  if (rootlocal_flag && mixed_flag)
+  /* longname and shortname only make sense with Windows paths. */
+  if ((longname_flag || shortname_flag) && !windows_flag)
     usage (stderr, 1);
 
   return o;

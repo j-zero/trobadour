@@ -23,18 +23,17 @@ details. */
 
 int Ropt, Vopt, fopt;
 uint64_t add, del, set;
-int set_used;
 
 struct option longopts[] = {
   { "recursive", no_argument, NULL, 'R' },
   { "verbose", no_argument, NULL, 'V' },
   { "force", no_argument, NULL, 'f' },
-  { "help", no_argument, NULL, 'H' },
+  { "help", no_argument, NULL, 'h' },
   { "version", no_argument, NULL, 'v' },
   { NULL, no_argument, NULL, 0}
 };
 
-const char *opts = "+RVfHv";
+const char *opts = "+RVfhv";
 
 struct
 {
@@ -53,12 +52,10 @@ struct
   { FS_OFFLINE_FL,	'o',	NULL },
   { FS_NOTINDEXED_FL,	'n',	"Notindexed" },
   { FS_ENCRYPT_FL,	'e',	"Encrypted" },
-  { FS_PINNED_FL,	'p',	"Pinned" },
-  { FS_UNPINNED_FL,	'u',	"Unpinned" },
   { FS_CASESENS_FL,	'C',	"Casesensitive" },
   { 0,			'\0',	NULL },
 };
-const char *supp_list = "rhsatSrconepuC";
+const char *supp_list = "rhsatSrconeC";
 
 void
 print_flags (uint64_t flags)
@@ -86,7 +83,6 @@ get_flags (const char *opt)
       break;
     case '=':
       mode = &set;
-      set_used = 1;
       break;
     default:
       return 1;
@@ -108,10 +104,10 @@ int
 sanity_check ()
 {
   int ret = -1;
-  if (!set_used && !add && !del)
+  if (!set && !add && !del)
     fprintf (stderr, "%s: Must use at least one of =, + or -\n",
 	     program_invocation_short_name);
-  else if (set_used && (add | del))
+  else if (set && (add | del))
     fprintf (stderr, "%s: = is incompatible with + and -\n",
 	     program_invocation_short_name);
   else if ((add & del) != 0)
@@ -142,7 +138,7 @@ chattr (const char *path)
 	       program_invocation_short_name, strerror (errno), path);
       return 1;
     }
-  if (set_used)
+  if (set)
     newflags = set;
   else
     {
@@ -215,7 +211,7 @@ static void
 print_version ()
 {
   printf ("%s (cygwin) %d.%d.%d\n"
-	  "Change file attributes\n"
+	  "Get POSIX ACL information\n"
 	  "Copyright (C) 2018 - %s Cygwin Authors\n"
 	  "This is free software; see the source for copying conditions.  "
 	  "There is NO\n"
@@ -228,10 +224,10 @@ print_version ()
 	  strrchr (__DATE__, ' ') + 1);
 }
 
-static void __attribute__ ((__noreturn__))
+static void
 usage (FILE *stream)
 {
-  fprintf (stream, "Usage: %s [-RVfHv] [+-=mode]... [file]...\n",
+  fprintf (stream, "Usage: %s [-RVfhv] [+-=mode]... [file]...\n",
 	   program_invocation_short_name);
   if (stream == stderr)
     fprintf (stream, "Try '%s --help' for more information\n",
@@ -240,23 +236,22 @@ usage (FILE *stream)
     fprintf (stream, "\n"
       "Change file attributes\n"
       "\n"
-      "  -R, --recursive     recursively apply the changes to directories and their\n"
+      "  -R, --recursive     recursively list attributes of directories and their \n"
       "                      contents\n"
       "  -V, --verbose       Be verbose during operation\n"
       "  -f, --force         suppress error messages\n"
-      "  -H, --help          this help text\n"
+      "  -h, --help          this help text\n"
       "  -v, --version       display the program version\n"
       "\n"
-      "The format of 'mode' is {+-=}[acCehnprsStu]\n"
+      "The format of 'mode' is {+-=}[acCehnrsSt]\n"
       "\n"
-      "The operator '+' causes the selected attributes to be added to the\n"
+      "The  operator '+' causes the selected attributes to be added to the\n"
       "existing attributes of the files; '-' causes them to be removed; and\n"
       "'=' causes them to be the only attributes that the files have.\n"
-      "A single '=' causes all attributes to be removed.\n"
       "\n"
       "Supported attributes:\n"
       "\n"
-      "  'r', 'Readonly':      file is read-only\n"
+      "  'r', 'Readonly':     file is read-only\n"
       "  'h', 'Hidden':        file or directory is hidden\n"
       "  's', 'System':        file or directory that the operating system uses\n"
       "  'a', 'Archive':       file or directory has the archive marker set\n"
@@ -266,17 +261,16 @@ usage (FILE *stream)
       "  'n', 'Notindexed':    file or directory is not to be indexed by the\n"
       "                        content indexing service\n"
       "  'e', 'Encrypted':     file is encrypted\n"
-      "  'p', 'Pinned':        file is pinned\n"
-      "  'u', 'Unpinned':      file is unpinned\n"
-      "  'C', 'Casesensitive': directory is handled case sensitive\n");
-  exit (stream == stdout ? 0 : 1);
+      "  'C', 'Casesensitive': directory is handled case sensitive\n"
+      "                        (Windows 10 1803 or later, local NTFS only,\n"
+      "                         WSL must be installed)\n");
 }
 
 int
 main (int argc, char **argv)
 {
   int c, ret = 0;
-  int lastoptind = 1;
+  int lastoptind = 0;
   char *opt;
 
   opterr = 0;
@@ -286,15 +280,15 @@ main (int argc, char **argv)
 	{
 	case 'R':
 	  Ropt = 1;
+	  lastoptind = optind;
 	  break;
 	case 'V':
 	  Vopt = 1;
+	  lastoptind = optind;
 	  break;
 	case 'f':
 	  fopt = 1;
-	  break;
-	case 'H':
-	  usage (stdout);
+	  lastoptind = optind;
 	  break;
 	case 'v':
 	  print_version ();
@@ -302,10 +296,15 @@ main (int argc, char **argv)
 	  break;
 	default:
 	  if (optind > lastoptind)
-	    --optind;
-	  goto next;
+	    {
+	      --optind;
+	      goto next;
+	    }
+	  /*FALLTHRU*/
+	case 'h':
+	  usage (c == 'h' ? stdout : stderr);
+	  return 1;
 	}
-      lastoptind = optind;
     }
 next:
   while (optind < argc)
@@ -318,16 +317,22 @@ next:
       opt = strchr ("+-=", argv[optind][0]);
       if (!opt)
 	break;
-      if ((*opt != '=' && argv[optind][1] == '\0') || get_flags (argv[optind]))
-	usage (stderr);
+      if (argv[optind][1] == '\0' || get_flags (argv[optind]))
+	{
+	  usage (stderr);
+	  return 1;
+	}
       ++optind;
     }
   if (sanity_check ())
     return 1;
   if (optind > argc - 1)
-    usage (stderr);
-
-  for (; optind < argc; ++optind)
+    {
+      chattr (".");
+      if (Ropt)
+	chattr_dir (".");
+    }
+  else for (; optind < argc; ++optind)
     {
       struct stat st;
 
@@ -349,7 +354,7 @@ next:
 	{
 	  if (chattr (argv[optind]))
 	    ret = 1;
-	  if (S_ISDIR (st.st_mode) && Ropt && chattr_dir (argv[optind]))
+	  if (S_ISDIR (st.st_mode) && chattr_dir (argv[optind]))
 	    ret = 1;
 	}
     }

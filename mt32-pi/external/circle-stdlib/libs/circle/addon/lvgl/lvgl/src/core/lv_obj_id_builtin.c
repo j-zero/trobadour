@@ -1,5 +1,5 @@
 /**
- * @file lv_obj_id_builtin.c
+ * @file lv_obj_id.c
  *
  */
 

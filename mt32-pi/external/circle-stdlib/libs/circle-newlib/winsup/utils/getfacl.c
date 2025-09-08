@@ -11,7 +11,6 @@ details. */
 #include <pwd.h>
 #include <grp.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <sys/acl.h>
@@ -49,7 +48,7 @@ groupname (gid_t gid)
   return gbuf;
 }
 
-static void __attribute__ ((__noreturn__))
+static void
 usage (FILE * stream)
 {
   fprintf (stream, "Usage: %s [-adn] FILE [FILE2...]\n"
@@ -98,7 +97,6 @@ usage (FILE * stream)
 	"     default:other::perm\n"
 	"\n");
     }
-  exit (stream == stdout ? 0 : 1);
 }
 
 struct option longopts[] = {
@@ -167,6 +165,7 @@ main (int argc, char **argv)
 	break;
       case 'h':
 	usage (stdout);
+	return 0;
       case 'n':
 	nopt = 1;
 	break;
@@ -178,7 +177,10 @@ main (int argc, char **argv)
 	return 1;
       }
   if (optind > argc - 1)
-    usage (stderr);
+    {
+      usage (stderr);
+      return 1;
+    }
   if (nopt)
     options |= TEXT_NUMERIC_IDS;
   if (eopt > 0)

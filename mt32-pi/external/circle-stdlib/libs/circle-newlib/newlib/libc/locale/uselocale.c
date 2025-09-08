@@ -64,9 +64,9 @@ _uselocale_r (struct _reent *p, struct __locale_t *newloc)
   if (!current_locale)
     current_locale = LC_GLOBAL_LOCALE;
   if (newloc == LC_GLOBAL_LOCALE)
-    _REENT_LOCALE(p) = NULL;
+    p->_locale = NULL;
   else if (newloc)
-    _REENT_LOCALE(p) = newloc;
+    p->_locale = newloc;
   return current_locale;
 }
 

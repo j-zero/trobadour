@@ -11,10 +11,8 @@ details. */
 
 #include "winsup.h"
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/cygwin.h>
 #include <sys/signalfd.h>
-#include <sys/reent.h> /* needed for __stdio_exit_handler declaration */
 #include "pinfo.h"
 #include "sigproc.h"
 #include "cygtls.h"
@@ -27,7 +25,7 @@ details. */
 
 #define _SA_NORESTART	0x8000
 
-static int sigaction_worker (int, const struct sigaction *, struct sigaction *, bool);
+static int __reg3 sigaction_worker (int, const struct sigaction *, struct sigaction *, bool);
 
 #define sigtrapped(func) ((func) != SIG_IGN && (func) != SIG_DFL)
 
@@ -38,7 +36,7 @@ signal (int sig, _sig_func_ptr func)
   _sig_func_ptr prev;
 
   /* check that sig is in right range */
-  if (sig <= 0 || sig >= _NSIG || sig == SIGKILL || sig == SIGSTOP)
+  if (sig <= 0 || sig >= NSIG || sig == SIGKILL || sig == SIGSTOP)
     {
       set_errno (EINVAL);
       syscall_printf ("SIG_ERR = signal (%d, %p)", sig, func);
@@ -176,7 +174,7 @@ sleep (unsigned int seconds)
   return 0;
 }
 
-extern "C" int
+extern "C" unsigned int
 usleep (useconds_t useconds)
 {
   struct timespec req;
@@ -204,18 +202,18 @@ sigprocmask (int how, const sigset_t *set, sigset_t *oldset)
   return res;
 }
 
-int
+int __reg3
 handle_sigprocmask (int how, const sigset_t *set, sigset_t *oldset, sigset_t& opmask)
 {
-  /* check that how is in right range if set is not NULL */
-  if (set && how != SIG_BLOCK && how != SIG_UNBLOCK && how != SIG_SETMASK)
+  /* check that how is in right range */
+  if (how != SIG_BLOCK && how != SIG_UNBLOCK && how != SIG_SETMASK)
     {
       syscall_printf ("Invalid how value %d", how);
       return EINVAL;
     }
 
   __try
-    {
+	{
       if (oldset)
 	*oldset = opmask;
 
@@ -248,7 +246,7 @@ handle_sigprocmask (int how, const sigset_t *set, sigset_t *oldset, sigset_t& op
   return 0;
 }
 
-int
+int __reg2
 _pinfo::kill (siginfo_t& si)
 {
   int res;
@@ -303,14 +301,9 @@ extern "C" int
 raise (int sig)
 {
   pthread *thread = _my_tls.tid;
-  if (!thread || !__isthreaded)
+  if (!thread)
     return kill (myself->pid, sig);
-
-  /* Make sure to return -1 and set errno, as on Linux. */
-  int err = pthread_kill (thread, sig);
-  if (err)
-    set_errno (err);
-  return err ? -1 : 0;
+  return pthread_kill (thread, sig);
 }
 
 static int
@@ -318,7 +311,7 @@ kill0 (pid_t pid, siginfo_t& si)
 {
   syscall_printf ("kill (%d, %d)", pid, si.si_signo);
   /* check that sig is in right range */
-  if (si.si_signo < 0 || si.si_signo >= _NSIG)
+  if (si.si_signo < 0 || si.si_signo >= NSIG)
     {
       set_errno (EINVAL);
       syscall_printf ("signal %d out of range", si.si_signo);
@@ -410,12 +403,12 @@ abort (void)
   _my_tls.call_signal_handler (); /* Call any signal handler */
 
   /* Flush all streams as per SUSv2.  */
-  if (__stdio_exit_handler)
-    (*__stdio_exit_handler) ();
+  if (_GLOBAL_REENT->__cleanup)
+    _GLOBAL_REENT->__cleanup (_GLOBAL_REENT);
   do_exit (SIGABRT);	/* signal handler didn't exit.  Goodbye. */
 }
 
-static int
+static int __reg3
 sigaction_worker (int sig, const struct sigaction *newact,
 		  struct sigaction *oldact, bool isinternal)
 {
@@ -424,7 +417,7 @@ sigaction_worker (int sig, const struct sigaction *newact,
     {
       sig_dispatch_pending ();
       /* check that sig is in right range */
-      if (sig <= 0 || sig >= _NSIG)
+      if (sig <= 0 || sig >= NSIG)
 	set_errno (EINVAL);
       else
 	{
@@ -451,9 +444,9 @@ sigaction_worker (int sig, const struct sigaction *newact,
 	      if (!(gs.sa_flags & SA_NODEFER))
 		gs.sa_mask |= SIGTOMASK(sig);
 	      if (gs.sa_handler == SIG_IGN)
-		sig_clear (sig, true);
+		sig_clear (sig);
 	      if (gs.sa_handler == SIG_DFL && sig == SIGCHLD)
-		sig_clear (sig, true);
+		sig_clear (sig);
 	      if (sig == SIGCHLD)
 		{
 		  myself->process_state &= ~PID_NOCLDSTOP;
@@ -487,7 +480,7 @@ extern "C" int
 sigaddset (sigset_t *set, const int sig)
 {
   /* check that sig is in right range */
-  if (sig <= 0 || sig >= _NSIG)
+  if (sig <= 0 || sig >= NSIG)
     {
       set_errno (EINVAL);
       syscall_printf ("SIG_ERR = sigaddset signal %d out of range", sig);
@@ -502,7 +495,7 @@ extern "C" int
 sigdelset (sigset_t *set, const int sig)
 {
   /* check that sig is in right range */
-  if (sig <= 0 || sig >= _NSIG)
+  if (sig <= 0 || sig >= NSIG)
     {
       set_errno (EINVAL);
       syscall_printf ("SIG_ERR = sigdelset signal %d out of range", sig);
@@ -517,7 +510,7 @@ extern "C" int
 sigismember (const sigset_t *set, int sig)
 {
   /* check that sig is in right range */
-  if (sig <= 0 || sig >= _NSIG)
+  if (sig <= 0 || sig >= NSIG)
     {
       set_errno (EINVAL);
       syscall_printf ("SIG_ERR = sigdelset signal %d out of range", sig);
@@ -615,7 +608,6 @@ sigwait_common (const sigset_t *set, siginfo_t *info, PLARGE_INTEGER waittime)
       set_signal_mask (_my_tls.sigwait_mask, *set);
       sig_dispatch_pending (true);
 
-do_wait:
       switch (cygwait (NULL, waittime,
 		       cw_sig_eintr | cw_cancel | cw_cancel_self))
 	{
@@ -634,24 +626,13 @@ do_wait:
 	      if (info)
 		*info = _my_tls.infodata;
 	      res = _my_tls.infodata.si_signo;
-	      _my_tls.current_sig = 0;
+	      _my_tls.sig = 0;
 	      if (_my_tls.retaddr () == (__tlsstack_t) sigdelayed)
 		_my_tls.pop ();
 	      _my_tls.unlock ();
 	    }
 	  break;
 	case WAIT_TIMEOUT:
-	  _my_tls.lock ();
-	  if (_my_tls.sigwait_mask == 0)
-	    {
-	      /* sigpacket::process() already started.
-	         Will surely be signalled soon. */
-	      waittime = cw_infinite;
-	      _my_tls.unlock ();
-	      goto do_wait;
-	    }
-	  _my_tls.sigwait_mask = 0;
-	  _my_tls.unlock ();
 	  set_errno (EAGAIN);
 	  break;
 	default:
@@ -728,7 +709,7 @@ sigqueue (pid_t pid, int sig, const union sigval value)
     }
   if (sig == 0)
     return 0;
-  if (sig < 0 || sig >= _NSIG)
+  if (sig < 0 || sig >= NSIG)
     {
       set_errno (EINVAL);
       return -1;

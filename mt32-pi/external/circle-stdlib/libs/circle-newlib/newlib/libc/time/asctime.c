@@ -45,10 +45,6 @@ ANSI C requires <<asctime>>.
 #include <_ansi.h>
 #include <reent.h>
 
-#ifdef _REENT_THREAD_LOCAL
-_Thread_local char _tls_asctime_buf[_REENT_ASCTIME_SIZE];
-#endif
-
 #ifndef _REENT_ONLY
 
 char *

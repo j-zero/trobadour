@@ -32,7 +32,6 @@
 */
 
 #include <fenv.h>
-#include "riscv_math.h"
 
 /* This implementation is intended to comply with the following
  * specification:
@@ -49,7 +48,7 @@
 int fegetexceptflag(fexcept_t *flagp, int excepts)
 {
 
-#if __RISCV_HARD_FLOAT
+#if __riscv_flen
 
   /* Mask excepts to be sure only supported flag bits are set */
 

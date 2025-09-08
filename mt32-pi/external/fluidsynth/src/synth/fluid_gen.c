@@ -13,8 +13,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA
  */
 
 
@@ -128,12 +129,5 @@ fluid_real_t fluid_gen_scale_nrpn(int gen, int data)
 
 const char *fluid_gen_name(int gen)
 {
-    static char num[12];
-    if (0 <= gen && gen < GEN_LAST)
-    {
-        return fluid_gen_info[gen].name;
-    }
-
-    FLUID_SNPRINTF(num, sizeof(num) / sizeof(char), "%d", gen);
-    return num;
+    return fluid_gen_info[gen].name;
 }

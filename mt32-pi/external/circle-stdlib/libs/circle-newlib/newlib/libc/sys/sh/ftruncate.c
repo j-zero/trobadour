@@ -2,8 +2,6 @@
 #include <sys/types.h>
 #include "sys/syscall.h"
 
-extern int __trap34 (int function, ...);
-
 int
 ftruncate (int file, off_t length)
 {

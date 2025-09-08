@@ -104,7 +104,11 @@ PORTABILITY
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *	This product includes software developed by the University of
+ *	California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -150,7 +154,7 @@ _wcstoull_l (struct _reent *rptr, const wchar_t *nptr, wchar_t **endptr,
 	register int neg = 0, any, cutlim;
 
 	if(base < 0  ||  base == 1  ||  base > 36)  {
-		_REENT_ERRNO(rptr) = EINVAL;
+		rptr->_errno = EINVAL;
 		return(0ULL);
 	}
 	/*
@@ -195,7 +199,7 @@ _wcstoull_l (struct _reent *rptr, const wchar_t *nptr, wchar_t **endptr,
 	}
 	if (any < 0) {
 		acc = ULLONG_MAX;
-		_REENT_ERRNO(rptr) = ERANGE;
+		rptr->_errno = ERANGE;
 	} else if (neg)
 		acc = -acc;
 	if (endptr != 0)

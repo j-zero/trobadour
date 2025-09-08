@@ -38,8 +38,7 @@ CStdlibApp::TShutdownMode CKernel::Run (void)
 
 	if (fp != nullptr)
 	{
-                auto const fp2 = fp;
-		fprintf(fp, "Opened file with (FILE *) %p\n", fp2);
+		fprintf(fp, "Opened file with (FILE *) %p\n", fp);
 		fclose(fp);
 
 		fp = fopen(stdio_filename, "r");

@@ -16,7 +16,6 @@
  */
 
 #include "fdlibm.h"
-#include <errno.h>
 
 #ifndef _DOUBLE_IS_32BITS
 
@@ -28,17 +27,19 @@
 #endif
 {
         double y;
-	y = __ieee754_tgamma(x);
+	int local_signgam;
+	y = __ieee754_gamma_r(x,&local_signgam);
+	if (local_signgam < 0) y = -y;
 #ifdef _IEEE_LIBM
 	return y;
 #else
 	if(_LIB_VERSION == _IEEE_) return y;
 
-	if(!finite(y)) {
-	  if(x < 0.0 && floor(x)==x)
-	    errno = EDOM;
-	  else if (finite(x))
-	    errno = ERANGE;
+	if(!finite(y)&&finite(x)) {
+	  if(floor(x)==x&&x<=0.0)
+	    return __kernel_standard(x,x,41); /* tgamma pole */
+	  else
+	    return __kernel_standard(x,x,40); /* tgamma overflow */
 	}
 	return y;
 #endif

@@ -1,13 +1,13 @@
 #include "../../lv_examples.h"
 #if LV_USE_SCALE && LV_BUILD_EXAMPLES
 
-#include "../../../lvgl_private.h" /*To expose the fields of lv_draw_task_t*/
+#include "../../../src/lvgl_private.h" //To expose the fields of lv_draw_task_t
 
 static void draw_event_cb(lv_event_t * e)
 {
-    lv_obj_t * obj = lv_event_get_target_obj(e);
+    lv_obj_t * obj = lv_event_get_target(e);
     lv_draw_task_t * draw_task = lv_event_get_draw_task(e);
-    lv_draw_dsc_base_t * base_dsc = (lv_draw_dsc_base_t *)lv_draw_task_get_draw_dsc(draw_task);
+    lv_draw_dsc_base_t * base_dsc = lv_draw_task_get_draw_dsc(draw_task);
     lv_draw_label_dsc_t * label_draw_dsc = lv_draw_task_get_label_dsc(draw_task);
     if(base_dsc->part == LV_PART_INDICATOR) {
         if(label_draw_dsc) {
@@ -20,7 +20,7 @@ static void draw_event_cb(lv_event_t * e)
                 lv_palette_main(LV_PALETTE_BLUE),
                 lv_palette_main(LV_PALETTE_PURPLE),
             };
-            uint32_t major_tick = lv_scale_get_major_tick_every(obj);
+            uint8_t major_tick = lv_scale_get_major_tick_every(obj);
             label_draw_dsc->color = color_idx[base_dsc->id1 / major_tick];
 
             /*Free the previously allocated text if needed*/
@@ -29,19 +29,12 @@ static void draw_event_cb(lv_event_t * e)
             /*Malloc the text and set text_local as 1 to make LVGL automatically free the text.
              * (Local texts are malloc'd internally by LVGL. Mimic this behavior here too)*/
             char tmp_buffer[20] = {0}; /* Big enough buffer */
-            lv_snprintf(tmp_buffer, sizeof(tmp_buffer), "%.1f", (double)base_dsc->id2);
+            lv_snprintf(tmp_buffer, sizeof(tmp_buffer), "%.1f", base_dsc->id2 * 1.0f);
             label_draw_dsc->text = lv_strdup(tmp_buffer);
             label_draw_dsc->text_local = 1;
 
-            lv_text_attributes_t attributes = {0};
             lv_point_t size;
-
-            attributes.text_flags = LV_TEXT_FLAG_NONE;
-            attributes.letter_space = 0;
-            attributes.line_space = 0;
-            attributes.max_width = 1000;
-
-            lv_text_get_size(&size, label_draw_dsc->text, label_draw_dsc->font, &attributes);
+            lv_text_get_size(&size, label_draw_dsc->text, label_draw_dsc->font, 0, 0, 1000, LV_TEXT_FLAG_NONE);
             int32_t new_w = size.x;
             int32_t old_w = lv_area_get_width(&draw_task->area);
 

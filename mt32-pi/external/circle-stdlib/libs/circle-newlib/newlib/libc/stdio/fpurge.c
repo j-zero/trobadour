@@ -72,7 +72,7 @@ _fpurge_r (struct _reent *ptr,
   t = fp->_flags;
   if (!t)
     {
-      _REENT_ERRNO(ptr) = EBADF;
+      ptr->_errno = EBADF;
       _newlib_flockfile_exit (fp);
       return EOF;
     }

@@ -120,8 +120,7 @@ CKernel::IoTest (void)
         PErrorExit ("Cannot open file for writing with fopen ()");
     }
 
-    auto const fp2 = fp;
-    if (fprintf (fp, "Opened file with (FILE *) %p\n", fp2) < 0)
+    if (fprintf (fp, "Opened file with (FILE *) %p\n", fp) < 0)
     {
         PErrorExit ("fprintf () failed");
     }

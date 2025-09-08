@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2015-2024, Synopsys, Inc. All rights reserved.
+   Copyright (c) 2015, Synopsys, Inc. All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions are met:
@@ -100,12 +100,7 @@ _open (const char * pathname, int flags, int mode)
 }
 
 /* Should be provided by crt0.S.  */
-#if defined (__ARC64__)
-/* TODO: long_call is not implemented yet in GCC. Fix this when implemented.  */
-extern void __attribute__((noreturn)) _exit_halt (int ret);
-#else
-extern void __attribute__((noreturn, long_call)) _exit_halt (int ret);
-#endif
+extern void __attribute__((noreturn)) _exit_halt ();
 
 void
 __attribute__((noreturn))
@@ -114,7 +109,7 @@ _exit (int ret)
   /* Doing an "exit" system call would work on nSIM with hostlink, but call to
      _exit_halt, which will do a CPU halt is more universal and will work in
      many other cases as well, including an FPGA/SoC.  */
-  _exit_halt (ret);
+  _exit_halt ();
 }
 
 /* This is a copy of newlib/libc/posix/_isatty.c.  It is needed because nSIM
@@ -211,7 +206,7 @@ _fstat (int fd, struct stat *buf)
 {
   struct nsim_stat nsim_stat;
   long __res;
-  _naked_syscall2 (__res, fstat, fd, &nsim_stat)
+  _naked_syscall2 (__res, stat, fd, &nsim_stat)
   translate_stat (&nsim_stat, buf);
   return __res;
 }

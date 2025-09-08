@@ -1,5 +1,3 @@
-extern int read (int, char *, int);
-
 int inbyte(void)
 {
 	char ch = 0;

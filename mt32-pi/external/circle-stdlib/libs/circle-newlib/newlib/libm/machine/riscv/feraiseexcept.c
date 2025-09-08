@@ -32,7 +32,6 @@
 */
 
 #include <fenv.h>
-#include "riscv_math.h"
 
 /* This implementation is intended to comply with the following
  * specification:
@@ -59,7 +58,7 @@ int feraiseexcept(int excepts)
 
   excepts &= FE_ALL_EXCEPT;
 
-#ifdef __RISCV_HARD_FLOAT
+#if __riscv_flen
 
   /* Set the requested exception flags */
 

@@ -4,8 +4,7 @@
 #include "trap.h"
 
 
-int
-_getpid (int n)
+_getpid (n)
 {
   return 1;
 }

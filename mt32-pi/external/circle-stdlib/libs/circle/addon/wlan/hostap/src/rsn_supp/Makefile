@@ -1,14 +1,9 @@
-CFLAGS += -DCONFIG_IEEE80211R
-CFLAGS += -DCONFIG_TDLS
-CFLAGS += -DCONFIG_WNM
-CFLAGS += -DIEEE8021X_EAPOL
+all:
+	@echo Nothing to be made.
 
-LIB_OBJS= \
-	pmksa_cache.o \
-	wpa_ft.o \
-	tdls.o \
-	preauth.o \
-	wpa.o \
-	wpa_ie.o
+clean:
+	for d in $(SUBDIRS); do make -C $$d clean; done
+	rm -f *~ *.o *.d
 
-include ../lib.rules
+install:
+	@echo Nothing to be made.

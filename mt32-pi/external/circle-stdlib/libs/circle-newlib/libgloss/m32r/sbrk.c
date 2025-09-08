@@ -2,10 +2,6 @@
 #include <sys/stat.h>
 #include "syscall.h"
 #include "eit.h"
-#include <stdlib.h>
-
-
-extern int _write (int, char *, int);
 
 caddr_t
 _sbrk (int incr)

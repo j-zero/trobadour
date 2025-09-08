@@ -13,8 +13,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA
  */
 
 #ifndef _FLUID_MOD_H
@@ -35,8 +36,6 @@ struct _fluid_mod_t
     unsigned char flags2;         /**< Source controller 2 flags */
     unsigned char trans;          /**< Output transform flag */
     double amount;                /**< Multiplier amount */
-    fluid_mod_mapping_t mapping_func; /**< Custom mapping function, might be NULL */
-    void *data;                       /**< Custom data pointer for mapping function */
     /* The 'next' field allows to link modulators into a list.  It is
      * not used in fluid_voice.c, there each voice allocates memory for a
      * fixed number of modulators.  Since there may be a huge number of
@@ -47,7 +46,7 @@ struct _fluid_mod_t
 
 fluid_real_t fluid_mod_get_value(fluid_mod_t *mod, fluid_voice_t *voice);
 int fluid_mod_check_sources(const fluid_mod_t *mod, char *name);
-fluid_real_t fluid_mod_transform_source_value(fluid_mod_t* mod, fluid_real_t val, unsigned char mod_flags, const fluid_real_t range, int is_src1);
+fluid_real_t fluid_mod_transform_source_value(fluid_real_t val, unsigned char mod_flags, const fluid_real_t range);
 
 
 #ifdef DEBUG

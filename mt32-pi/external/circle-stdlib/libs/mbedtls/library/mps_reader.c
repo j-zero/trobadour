@@ -5,9 +5,9 @@
  *  SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  */
 
-#include "ssl_misc.h"
+#include "common.h"
 
-#if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+#if defined(MBEDTLS_SSL_PROTO_TLS1_3_EXPERIMENTAL)
 
 #include "mps_reader.h"
 #include "mps_common.h"
@@ -535,4 +535,4 @@ int mbedtls_mps_reader_reclaim(mbedtls_mps_reader *rd,
     MBEDTLS_MPS_TRACE_RETURN(0);
 }
 
-#endif /* MBEDTLS_SSL_PROTO_TLS1_3 */
+#endif /* MBEDTLS_SSL_PROTO_TLS1_3_EXPERIMENTAL */

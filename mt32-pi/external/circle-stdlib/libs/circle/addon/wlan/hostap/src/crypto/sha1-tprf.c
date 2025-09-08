@@ -2,8 +2,14 @@
  * SHA1 T-PRF for EAP-FAST
  * Copyright (c) 2003-2005, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -65,8 +71,6 @@ int sha1_t_prf(const u8 *key, size_t key_len, const char *label,
 		}
 		len[0] = SHA1_MAC_LEN;
 	}
-
-	forced_memzero(hash, SHA1_MAC_LEN);
 
 	return 0;
 }

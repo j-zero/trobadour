@@ -5,7 +5,7 @@
  * Redistribution and use in source and binary forms are permitted
  * provided that the above copyright notice and this paragraph are
  * duplicated in all such forms and that any documentation,
- * and/or other materials related to such
+ * advertising materials, and other materials related to such
  * distribution and use acknowledge that the software was developed
  * by the University of California, Berkeley.  The name of the
  * University may not be used to endorse or promote products derived
@@ -40,9 +40,6 @@
 /*
  * Write some memory regions.  Return zero on success, EOF on error.
  *
- * On systems supporting threads, this function *must* be called under
- * _newlib_flockfile_start locking.
- *
  * This routine is large and unsightly, but most of the ugliness due
  * to the three different kinds of output buffering is handled here.
  */
@@ -70,43 +67,21 @@ __sfvwrite_r (struct _reent *ptr,
   len = 0;
 
 #ifdef __SCLE
-  /* This only affects Cygwin, so calling __sputc_r *and* __swputc_r
-   * from here doesn't matter.
-   */
   if (fp->_flags & __SCLE) /* text mode */
     {
-      if (fp->_flags2 & __SWID)
-	{
-	  do
-	    {
-	      GETIOV (;);
-	      while (len > 0)
-		{
-		  if (__swputc_r (ptr, *p, fp) == EOF)
-		    return EOF;
-		  p++;
-		  len--;
-		  uio->uio_resid--;
-		}
-	    }
-	  while (uio->uio_resid > 0);
-	}
-      else
-	{
-	  do
-	    {
-	      GETIOV (;);
-	      while (len > 0)
-		{
-		  if (__sputc_r (ptr, *p, fp) == EOF)
-		    return EOF;
-		  p++;
-		  len--;
-		  uio->uio_resid--;
-		}
-	    }
-	  while (uio->uio_resid > 0);
-	}
+      do
+        {
+          GETIOV (;);
+          while (len > 0)
+            {
+              if (putc (*p, fp) == EOF)
+                return EOF;
+              p++;
+              len--;
+              uio->uio_resid--;
+            }
+        }
+      while (uio->uio_resid > 0);
       return 0;
     }
 #endif
@@ -170,7 +145,7 @@ __sfvwrite_r (struct _reent *ptr,
 		      str = (unsigned char *)_malloc_r (ptr, newsize);
 		      if (!str)
 			{
-			  _REENT_ERRNO(ptr) = ENOMEM;
+			  ptr->_errno = ENOMEM;
 			  goto err;
 			}
 		      memcpy (str, fp->_bf._base, curpos);
@@ -187,7 +162,7 @@ __sfvwrite_r (struct _reent *ptr,
 			  _free_r (ptr, fp->_bf._base);
 			  fp->_flags &=  ~__SMBF;
 			  /* Ensure correct errno, even if free changed it.  */
-			  _REENT_ERRNO(ptr) = ENOMEM;
+			  ptr->_errno = ENOMEM;
 			  goto err;
 			}
 		    }

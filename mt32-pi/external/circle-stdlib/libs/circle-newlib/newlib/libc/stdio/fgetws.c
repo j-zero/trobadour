@@ -110,8 +110,7 @@ _fgetws_r (struct _reent *ptr,
   unsigned char *nl;
 
   _newlib_flockfile_start (fp);
-  if (ORIENT (fp, 1) != 1)
-    goto error;
+  ORIENT (fp, 1);
 
   if (n <= 0)
     {

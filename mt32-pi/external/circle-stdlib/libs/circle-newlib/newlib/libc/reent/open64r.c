@@ -52,7 +52,7 @@ _open64_r (ptr, file, flags, mode)
 
   errno = 0;
   if ((ret = _open64 (file, flags, mode)) == -1 && errno != 0)
-    _REENT_ERRNO(ptr) = errno;
+    ptr->_errno = errno;
   return ret;
 }
 

@@ -121,12 +121,11 @@ main(int ac, char **av)
 		 * Call mmap to map the temporary file 'TEMPFILE'
 	 	 * with read and execute access.
 		 */
-		errno = 0;
-		addr = mmap(0, page_sz, PROT_READ|PROT_EXEC,
-			    MAP_FILE|MAP_SHARED, fildes, 0);
+		TEST(mmap(0, page_sz, PROT_READ|PROT_EXEC,
+			    MAP_FILE|MAP_SHARED, fildes, 0));
 
 		/* Check for the return value of mmap() */
-		if (addr == MAP_FAILED) {
+		if (TEST_RETURN == (int)MAP_FAILED) {
 			tst_resm(TFAIL, "mmap() Failed on %s, errno=%d : %s",
 				 TEMPFILE, errno, strerror(errno));
 			continue;
@@ -137,6 +136,9 @@ main(int ac, char **av)
 		 * executed without (-f) option.
 		 */
 		if (STD_FUNCTIONAL_TEST) {
+			/* Get the mmap return value */
+			addr = (char *)TEST_RETURN;
+
 			/*
 			 * Read the file contents into the dummy
 			 * variable.
@@ -223,7 +225,7 @@ setup()
 	}
 
 	/* Write test buffer contents into temporary file */
-	if (write(fildes, tst_buff, page_sz) < page_sz) {
+	if (write(fildes, tst_buff, strlen(tst_buff)) < (int)strlen(tst_buff)) {
 		tst_brkm(TFAIL, NULL, "write() on %s Failed, errno=%d : %s",
 			 TEMPFILE, errno, strerror(errno));
 		free(tst_buff);

@@ -81,7 +81,6 @@ static pthread_rwlock_t		 rwlock = PTHREAD_RWLOCK_INITIALIZER;
 #else
 
 #include "../locale/setlocale.h"
-#include "winsup.h"
 #define SIZE_T_MAX __SIZE_MAX__
 #define _close close
 #define _open open
@@ -234,7 +233,7 @@ catopen(const char *name, int type)
 						break;
 					case '%':
 						++nlspath;
-						fallthrough;
+						/* FALLTHROUGH */
 					default:
 						if (pathP - path >=
 						    sizeof(path) - 1)

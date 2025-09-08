@@ -10,16 +10,10 @@ extern "C" {
 
 #include <sys/reent.h>
 
-#ifdef _REENT_THREAD_LOCAL
-#define errno (_tls_errno)
-#else /* _REENT_THREAD_LOCAL */
-
 #ifndef _REENT_ONLY
 #define errno (*__errno())
 extern int *__errno (void);
 #endif
-
-#endif /* _REENT_THREAD_LOCAL */
 
 /* Please don't use these variables directly.
    Use strerror instead. */
@@ -32,7 +26,7 @@ extern __IMPORT char *program_invocation_name;
 extern __IMPORT char *program_invocation_short_name;
 #endif
 
-#define __errno_r(ptr) _REENT_ERRNO(ptr)
+#define __errno_r(ptr) ((ptr)->_errno)
 
 #define	EPERM 1		/* Not owner */
 #define	ENOENT 2	/* No such file or directory */
@@ -176,9 +170,9 @@ extern __IMPORT char *program_invocation_short_name;
 #ifdef __LINUX_ERRNO_EXTENSIONS__
 #define ENOMEDIUM 135   /* No medium (in tape drive) */
 #endif
-#if defined(__CYGWIN__) && !defined(__INSIDE_CYGWIN__)
-#define ENOSHARE (_Pragma("GCC warning \"'ENOSHARE' is no longer used by Cygwin\"") 136)
-#define ECASECLASH (_Pragma("GCC warning \"'ECASECLASH' is no longer used by Cygwin\"") 137)
+#ifdef __CYGWIN__
+#define ENOSHARE 136    /* No such host or network path */
+#define ECASECLASH 137  /* Filename exists with different case */
 #endif
 #define EILSEQ 138		/* Illegal byte sequence */
 #define EOVERFLOW 139	/* Value too large for defined data type */

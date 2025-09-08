@@ -2,8 +2,14 @@
  * Example application using RADIUS client as a library
  * Copyright (c) 2007, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -12,6 +18,8 @@
 #include "eloop.h"
 #include "radius/radius.h"
 #include "radius/radius_client.h"
+
+extern int wpa_debug_level;
 
 struct radius_ctx {
 	struct radius_client_data *radius;
@@ -31,13 +39,12 @@ static void hostapd_logger_cb(void *ctx, const u8 *addr, unsigned int module,
 /* Process the RADIUS frames from Authentication Server */
 static RadiusRxResult receive_auth(struct radius_msg *msg,
 				   struct radius_msg *req,
-				   const u8 *shared_secret,
-				   size_t shared_secret_len,
+				   u8 *shared_secret, size_t shared_secret_len,
 				   void *data)
 {
 	/* struct radius_ctx *ctx = data; */
 	printf("Received RADIUS Authentication message; code=%d\n",
-	       radius_msg_get_hdr(msg)->code);
+	       msg->hdr->code);
 
 	/* We're done for this example, so request eloop to terminate. */
 	eloop_terminate();
@@ -61,12 +68,13 @@ static void start_example(void *eloop_ctx, void *timeout_ctx)
 		return;
 	}
 
-	radius_msg_make_authenticator(msg);
+	radius_msg_make_authenticator(msg, (u8 *) ctx, sizeof(*ctx));
 
 	if (!radius_msg_add_attr(msg, RADIUS_ATTR_USER_NAME,
 				 (u8 *) "user", 4)) {
 		printf("Could not add User-Name\n");
 		radius_msg_free(msg);
+		os_free(msg);
 		return;
 	}
 
@@ -76,6 +84,7 @@ static void start_example(void *eloop_ctx, void *timeout_ctx)
 		    ctx->conf.auth_server->shared_secret_len)) {
 		printf("Could not add User-Password\n");
 		radius_msg_free(msg);
+		os_free(msg);
 		return;
 	}
 
@@ -83,11 +92,11 @@ static void start_example(void *eloop_ctx, void *timeout_ctx)
 				 (u8 *) &ctx->own_ip_addr, 4)) {
 		printf("Could not add NAS-IP-Address\n");
 		radius_msg_free(msg);
+		os_free(msg);
 		return;
 	}
 
-	if (radius_client_send(ctx->radius, msg, RADIUS_AUTH, NULL) < 0)
-		radius_msg_free(msg);
+	radius_client_send(ctx->radius, msg, RADIUS_AUTH, NULL);
 }
 
 
@@ -104,7 +113,7 @@ int main(int argc, char *argv[])
 	os_memset(&ctx, 0, sizeof(ctx));
 	inet_aton("127.0.0.1", &ctx.own_ip_addr);
 
-	if (eloop_init()) {
+	if (eloop_init(&ctx)) {
 		printf("Failed to initialize event loop\n");
 		return -1;
 	}
@@ -144,7 +153,6 @@ int main(int argc, char *argv[])
 
 	radius_client_deinit(ctx.radius);
 	os_free(srv->shared_secret);
-	os_free(srv);
 
 	eloop_destroy();
 	os_program_deinit();

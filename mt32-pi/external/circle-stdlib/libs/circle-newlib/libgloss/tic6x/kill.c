@@ -15,8 +15,6 @@
 #include <_ansi.h>
 #define __MYPID 1
 
-#include <unistd.h>
-
 /*
  * kill -- go out via exit...
  */

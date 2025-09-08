@@ -84,7 +84,7 @@ mythread(void * arg)
 
   pthread_cleanup_pop(1);
 
-  return (void *) (size_t) result;
+  return (void *) result;
 }
 
 int
@@ -129,18 +129,18 @@ main()
   for (i = 1; i <= NUMTHREADS; i++)
     {
       int fail = 0;
-      void* result = 0;
+      int result = 0;
 
-      assert(pthread_join(t[i], &result) == 0);
+      assert(pthread_join(t[i], (void **) &result) == 0);
 
-      fail = ((int)(size_t)result != 0);
+      fail = (result != 0);
 
       if (fail)
 	{
 	  fprintf(stderr, "Thread %d: started %d: result: %d\n",
 		  i,
 		  threadbag[i].started,
-		  (int)(size_t)result);
+		  result);
 	}
       failed = (failed || fail);
     }

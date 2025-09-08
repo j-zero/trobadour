@@ -2,17 +2,22 @@
  * EAP peer method: LEAP
  * Copyright (c) 2004-2007, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
-#include "crypto/ms_funcs.h"
-#include "crypto/crypto.h"
-#include "crypto/random.h"
 #include "eap_i.h"
+#include "ms_funcs.h"
+#include "crypto.h"
 
 #define LEAP_VERSION 1
 #define LEAP_CHALLENGE_LEN 8
@@ -45,7 +50,7 @@ static void * eap_leap_init(struct eap_sm *sm)
 		return NULL;
 	data->state = LEAP_WAIT_CHALLENGE;
 
-	sm->leap_done = false;
+	sm->leap_done = FALSE;
 	return data;
 }
 
@@ -77,14 +82,14 @@ static struct wpabuf * eap_leap_process_request(struct eap_sm *sm, void *priv,
 	pos = eap_hdr_validate(EAP_VENDOR_IETF, EAP_TYPE_LEAP, reqData, &len);
 	if (pos == NULL || len < 3) {
 		wpa_printf(MSG_INFO, "EAP-LEAP: Invalid EAP-Request frame");
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
 	if (*pos != LEAP_VERSION) {
 		wpa_printf(MSG_WARNING, "EAP-LEAP: Unsupported LEAP version "
 			   "%d", *pos);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 	pos++;
@@ -96,7 +101,7 @@ static struct wpabuf * eap_leap_process_request(struct eap_sm *sm, void *priv,
 		wpa_printf(MSG_INFO, "EAP-LEAP: Invalid challenge "
 			   "(challenge_len=%d reqDataLen=%lu)",
 			   challenge_len, (unsigned long) wpabuf_len(reqData));
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 	challenge = pos;
@@ -115,14 +120,10 @@ static struct wpabuf * eap_leap_process_request(struct eap_sm *sm, void *priv,
 	wpabuf_put_u8(resp, 0); /* unused */
 	wpabuf_put_u8(resp, LEAP_RESPONSE_LEN);
 	rpos = wpabuf_put(resp, LEAP_RESPONSE_LEN);
-	if ((pwhash && challenge_response(challenge, password, rpos)) ||
-	    (!pwhash &&
-	     nt_challenge_response(challenge, password, password_len, rpos))) {
-		wpa_printf(MSG_DEBUG, "EAP-LEAP: Failed to derive response");
-		ret->ignore = true;
-		wpabuf_free(resp);
-		return NULL;
-	}
+	if (pwhash)
+		challenge_response(challenge, password, rpos);
+	else
+		nt_challenge_response(challenge, password, password_len, rpos);
 	os_memcpy(data->peer_response, rpos, LEAP_RESPONSE_LEN);
 	wpa_hexdump(MSG_MSGDUMP, "EAP-LEAP: Response",
 		    rpos, LEAP_RESPONSE_LEN);
@@ -153,7 +154,7 @@ static struct wpabuf * eap_leap_process_success(struct eap_sm *sm, void *priv,
 	if (data->state != LEAP_WAIT_SUCCESS) {
 		wpa_printf(MSG_INFO, "EAP-LEAP: EAP-Success received in "
 			   "unexpected state (%d) - ignored", data->state);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
@@ -166,11 +167,11 @@ static struct wpabuf * eap_leap_process_success(struct eap_sm *sm, void *priv,
 	wpabuf_put_u8(resp, 0); /* unused */
 	wpabuf_put_u8(resp, LEAP_CHALLENGE_LEN);
 	pos = wpabuf_put(resp, LEAP_CHALLENGE_LEN);
-	if (random_get_bytes(pos, LEAP_CHALLENGE_LEN)) {
+	if (os_get_random(pos, LEAP_CHALLENGE_LEN)) {
 		wpa_printf(MSG_WARNING, "EAP-LEAP: Failed to read random data "
 			   "for challenge");
 		wpabuf_free(resp);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 	os_memcpy(data->ap_challenge, pos, LEAP_CHALLENGE_LEN);
@@ -204,14 +205,14 @@ static struct wpabuf * eap_leap_process_response(struct eap_sm *sm, void *priv,
 	pos = eap_hdr_validate(EAP_VENDOR_IETF, EAP_TYPE_LEAP, reqData, &len);
 	if (pos == NULL || len < 3) {
 		wpa_printf(MSG_INFO, "EAP-LEAP: Invalid EAP-Response frame");
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
 	if (*pos != LEAP_VERSION) {
 		wpa_printf(MSG_WARNING, "EAP-LEAP: Unsupported LEAP version "
 			   "%d", *pos);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 	pos++;
@@ -223,7 +224,7 @@ static struct wpabuf * eap_leap_process_response(struct eap_sm *sm, void *priv,
 		wpa_printf(MSG_INFO, "EAP-LEAP: Invalid response "
 			   "(response_len=%d reqDataLen=%lu)",
 			   response_len, (unsigned long) wpabuf_len(reqData));
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
@@ -233,25 +234,22 @@ static struct wpabuf * eap_leap_process_response(struct eap_sm *sm, void *priv,
 
 	if (pwhash) {
 		if (hash_nt_password_hash(password, pw_hash_hash)) {
-			ret->ignore = true;
+			ret->ignore = TRUE;
 			return NULL;
 		}
 	} else {
 		if (nt_password_hash(password, password_len, pw_hash) ||
 		    hash_nt_password_hash(pw_hash, pw_hash_hash)) {
-			ret->ignore = true;
+			ret->ignore = TRUE;
 			return NULL;
 		}
 	}
-	if (challenge_response(data->ap_challenge, pw_hash_hash, expected)) {
-		ret->ignore = true;
-		return NULL;
-	}
+	challenge_response(data->ap_challenge, pw_hash_hash, expected);
 
 	ret->methodState = METHOD_DONE;
-	ret->allowNotifications = false;
+	ret->allowNotifications = FALSE;
 
-	if (os_memcmp_const(pos, expected, LEAP_RESPONSE_LEN) != 0) {
+	if (os_memcmp(pos, expected, LEAP_RESPONSE_LEN) != 0) {
 		wpa_printf(MSG_WARNING, "EAP-LEAP: AP sent an invalid "
 			   "response - authentication failed");
 		wpa_hexdump(MSG_DEBUG, "EAP-LEAP: Expected response from AP",
@@ -265,7 +263,7 @@ static struct wpabuf * eap_leap_process_response(struct eap_sm *sm, void *priv,
 	/* LEAP is somewhat odd method since it sends EAP-Success in the middle
 	 * of the authentication. Use special variable to transit EAP state
 	 * machine to SUCCESS state. */
-	sm->leap_done = true;
+	sm->leap_done = TRUE;
 	data->state = LEAP_DONE;
 
 	/* No more authentication messages expected; AP will send EAPOL-Key
@@ -286,7 +284,7 @@ static struct wpabuf * eap_leap_process(struct eap_sm *sm, void *priv,
 	if (password == NULL) {
 		wpa_printf(MSG_INFO, "EAP-LEAP: Password not configured");
 		eap_sm_request_password(sm);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
@@ -300,16 +298,16 @@ static struct wpabuf * eap_leap_process(struct eap_sm *sm, void *priv,
 	if (wpabuf_len(reqData) < sizeof(*eap) ||
 	    be_to_host16(eap->length) > wpabuf_len(reqData)) {
 		wpa_printf(MSG_INFO, "EAP-LEAP: Invalid frame");
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
-	ret->ignore = false;
-	ret->allowNotifications = true;
+	ret->ignore = FALSE;
+	ret->allowNotifications = TRUE;
 	ret->methodState = METHOD_MAY_CONT;
 	ret->decision = DECISION_FAIL;
 
-	sm->leap_done = false;
+	sm->leap_done = FALSE;
 
 	switch (eap->code) {
 	case EAP_CODE_REQUEST:
@@ -321,13 +319,13 @@ static struct wpabuf * eap_leap_process(struct eap_sm *sm, void *priv,
 	default:
 		wpa_printf(MSG_INFO, "EAP-LEAP: Unexpected EAP code (%d) - "
 			   "ignored", eap->code);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 }
 
 
-static bool eap_leap_isKeyAvailable(struct eap_sm *sm, void *priv)
+static Boolean eap_leap_isKeyAvailable(struct eap_sm *sm, void *priv)
 {
 	struct eap_leap_data *data = priv;
 	return data->state == LEAP_DONE;
@@ -390,9 +388,6 @@ static u8 * eap_leap_getKey(struct eap_sm *sm, void *priv, size_t *len)
 	wpa_hexdump_key(MSG_DEBUG, "EAP-LEAP: master key", key, LEAP_KEY_LEN);
 	*len = LEAP_KEY_LEN;
 
-	forced_memzero(pw_hash, sizeof(pw_hash));
-	forced_memzero(pw_hash_hash, sizeof(pw_hash_hash));
-
 	return key;
 }
 
@@ -400,6 +395,7 @@ static u8 * eap_leap_getKey(struct eap_sm *sm, void *priv, size_t *len)
 int eap_peer_leap_register(void)
 {
 	struct eap_method *eap;
+	int ret;
 
 	eap = eap_peer_method_alloc(EAP_PEER_METHOD_INTERFACE_VERSION,
 				    EAP_VENDOR_IETF, EAP_TYPE_LEAP, "LEAP");
@@ -412,5 +408,8 @@ int eap_peer_leap_register(void)
 	eap->isKeyAvailable = eap_leap_isKeyAvailable;
 	eap->getKey = eap_leap_getKey;
 
-	return eap_peer_method_register(eap);
+	ret = eap_peer_method_register(eap);
+	if (ret)
+		eap_peer_method_free(eap);
+	return ret;
 }

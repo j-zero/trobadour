@@ -133,7 +133,8 @@ int Forker_npids=0;             /* number of entries in Forker_pids */
  *  !0 : if fork failed, the return value will be the errno.
  ***********************************************************************/
 int
-background(char *prefix)
+background(prefix)
+char *prefix;
 {
   switch (fork()) {
   case -1:
@@ -158,13 +159,12 @@ background(char *prefix)
  * 
  ***********************************************************************/
 int
-forker(
-	int ncopies,
-	int mode,		/* 0 - all childern of parent, 1 - only 1 direct child */
-	char *prefix	/* if ! NULL, an message will be printed to stderr */
-					/* if fork fails.  The prefix (program name) will */
-					/* preceed the message */
-)
+forker(ncopies, mode, prefix)
+int ncopies;
+int mode;	/* 0 - all childern of parent, 1 - only 1 direct child */
+char *prefix;   /* if ! NULL, an message will be printed to stderr */
+		/* if fork fails.  The prefix (program name) will */
+	        /* preceed the message */
 {
     int cnt;
     int pid;

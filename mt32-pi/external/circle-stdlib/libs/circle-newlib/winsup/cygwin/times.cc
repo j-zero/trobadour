@@ -24,15 +24,18 @@ details. */
 #include "thread.h"
 #include "cygtls.h"
 #include "ntdll.h"
+#include "spinlock.h"
 
 static inline void __attribute__ ((always_inline))
 get_system_time (PLARGE_INTEGER systime)
 {
-  GetSystemTimePreciseAsFileTime ((LPFILETIME) systime);
+  wincap.has_precise_system_time ()
+  	? GetSystemTimePreciseAsFileTime ((LPFILETIME) systime)
+	: GetSystemTimeAsFileTime ((LPFILETIME) systime);
 }
 
 /* Cygwin internal */
-static uint64_t
+static uint64_t __stdcall
 __to_clock_t (PLARGE_INTEGER src, int flag)
 {
   uint64_t total = src->QuadPart;
@@ -89,6 +92,8 @@ times (struct tms *buf)
   syscall_printf ("%D = times(%p)", tc, buf);
   return tc;
 }
+
+EXPORT_ALIAS (times, _times)
 
 /* settimeofday: BSD */
 extern "C" int
@@ -149,7 +154,7 @@ timezone (void)
 }
 
 /* Cygwin internal */
-void
+void __stdcall
 totimeval (struct timeval *dst, PLARGE_INTEGER src, int sub, int flag)
 {
   int64_t x = __to_clock_t (src, flag);
@@ -169,13 +174,10 @@ gettimeofday (struct timeval *__restrict tv, void *__restrict tzvp)
   static bool tzflag;
   LONGLONG now = get_clock (CLOCK_REALTIME)->usecs ();
 
-  if (tv)
-    {
-      tv->tv_sec = now / USPERSEC;
-      tv->tv_usec = now % USPERSEC;
-    }
+  tv->tv_sec = now / USPERSEC;
+  tv->tv_usec = now % USPERSEC;
 
-  if (tz)
+  if (tz != NULL)
     {
       if (!tzflag)
 	{
@@ -189,8 +191,10 @@ gettimeofday (struct timeval *__restrict tv, void *__restrict tzvp)
   return 0;
 }
 
+EXPORT_ALIAS (gettimeofday, _gettimeofday)
+
 /* Cygwin internal */
-void
+void __stdcall
 timespec_to_filetime (const struct timespec *time_in, PLARGE_INTEGER out)
 {
   if (time_in->tv_nsec == UTIME_OMIT)
@@ -201,7 +205,7 @@ timespec_to_filetime (const struct timespec *time_in, PLARGE_INTEGER out)
 }
 
 /* Cygwin internal */
-void
+void __stdcall
 timeval_to_filetime (const struct timeval *time_in, PLARGE_INTEGER out)
 {
   out->QuadPart = time_in->tv_sec * NS100PERSEC
@@ -226,7 +230,7 @@ timeval_to_ms (const struct timeval *time_in, DWORD &ms)
 }
 
 /* Cygwin internal */
-static timeval
+static timeval __stdcall
 time_t_to_timeval (time_t in)
 {
   timeval res;
@@ -261,7 +265,7 @@ timeval_to_timespec (const struct timeval *tvp, struct timespec *tmp)
 
 /* Cygwin internal */
 /* Convert a Win32 time to "UNIX" format. */
-time_t
+time_t __stdcall
 to_time_t (PLARGE_INTEGER ptr)
 {
   /* A file time is the number of 100ns since jan 1 1601
@@ -281,7 +285,7 @@ to_time_t (PLARGE_INTEGER ptr)
 
 /* Cygwin internal */
 /* Convert a Win32 time to "UNIX" timestruc_t format. */
-void
+void __stdcall
 to_timestruc_t (PLARGE_INTEGER ptr, timestruc_t *out)
 {
   /* A file time is the number of 100ns since jan 1 1601
@@ -305,7 +309,7 @@ to_timestruc_t (PLARGE_INTEGER ptr, timestruc_t *out)
 
 /* Cygwin internal */
 /* Get the current time as a "UNIX" timestruc_t format. */
-void
+void __stdcall
 time_as_timestruc_t (timestruc_t * out)
 {
   LARGE_INTEGER systime;
@@ -381,7 +385,7 @@ error:
 
 /* utimes: POSIX/SUSv3 */
 extern "C" int
-utimes (const char *path, const struct timeval tvp[2])
+utimes (const char *path, const struct timeval *tvp)
 {
   path_conv win32 (path, PC_POSIX | PC_SYM_FOLLOW, stat_suffixes);
   struct timespec tmp[2];
@@ -390,7 +394,7 @@ utimes (const char *path, const struct timeval tvp[2])
 
 /* BSD */
 extern "C" int
-lutimes (const char *path, const struct timeval tvp[2])
+lutimes (const char *path, const struct timeval *tvp)
 {
   path_conv win32 (path, PC_POSIX | PC_SYM_NOFOLLOW, stat_suffixes);
   struct timespec tmp[2];
@@ -399,7 +403,7 @@ lutimes (const char *path, const struct timeval tvp[2])
 
 /* futimens: POSIX/SUSv4 */
 extern "C" int
-futimens (int fd, const struct timespec tvp[2])
+futimens (int fd, const struct timespec *tvp)
 {
   int res;
 
@@ -416,7 +420,7 @@ futimens (int fd, const struct timespec tvp[2])
 
 /* BSD */
 extern "C" int
-futimes (int fd, const struct timeval tvp[2])
+futimes (int fd, const struct timeval *tvp)
 {
   struct timespec tmp[2];
   return futimens (fd,  timeval_to_timespec (tvp, tmp));
@@ -557,15 +561,3 @@ clock_getcpuclockid (pid_t pid, clockid_t *clk_id)
   *clk_id = (clockid_t) PID_TO_CLOCKID (pid);
   return 0;
 }
-
-extern "C" int
-timespec_get (struct timespec *ts, int base)
-{
-  if (base != TIME_UTC)
-    return 0;
-  clock_gettime (CLOCK_REALTIME, ts);
-  return base;
-}
-
-EXPORT_ALIAS (gettimeofday, _gettimeofday)
-EXPORT_ALIAS (times, _times)

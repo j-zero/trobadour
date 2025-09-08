@@ -12,8 +12,6 @@ details. */
 #error "woutsup.h is not for code being compiled inside the dll"
 #endif
 
-#define fallthrough	__attribute__((__fallthrough__))
-
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0500
 #endif

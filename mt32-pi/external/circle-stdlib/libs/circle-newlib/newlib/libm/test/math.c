@@ -24,10 +24,14 @@
 #include <errno.h>
 #include <stdio.h>
 
+int inacc;
+
 int merror;
 double mretval = 64;
 int traperror = 1;
 char *mname;
+
+int verbose;
 
 void translate_to (FILE *file,
 	    double r)
@@ -97,6 +101,7 @@ thedouble (long msw,
 }
 
 int calc;
+int reduce;
 
 
 frontline (FILE *f,
@@ -166,6 +171,7 @@ finish (FILE *f,
     frontline(f, mag, p, result, merror, errno, args , name);
   }
 } 
+int redo;  
 
 run_vector_1 (int vector,
        one_line_type *p,

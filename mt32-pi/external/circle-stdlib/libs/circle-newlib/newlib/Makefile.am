@@ -1,18 +1,17 @@
 ## Process this file with automake to generate Makefile.in
 
-AUTOMAKE_OPTIONS = dejagnu
-ACLOCAL_AMFLAGS = -I . -I .. -I ../config
+AUTOMAKE_OPTIONS = cygnus dejagnu
+ACLOCAL_AMFLAGS = -I . -I ..
 
-# Variables that will accumulate in subdirs.
-CLEANFILES =
-EXTRA_DIST =
-EXTRA_PROGRAMS =
-PHONY =
-SUFFIXES =
-check_PROGRAMS =
-info_TEXINFOS =
-noinst_DATA =
-INSTALL_DATA_LOCAL =
+# Multilib support variables.
+MULTISRCTOP =
+MULTIBUILDTOP =
+MULTIDIRS =
+MULTISUBDIR =
+MULTIDO = true
+MULTICLEAN = true
+
+LIBTOOL_VERSION_INFO = 0:0:0
 
 # The newlib hardware floating-point routines have been disabled due to
 # inaccuracy.  If you wish to work on them, you will need to edit the
@@ -28,6 +27,7 @@ endif
 # values defined in terms of make variables, as is the case for CC and
 # friends when we are called from the top level Makefile.
 AM_MAKEFLAGS = \
+	"AR_FLAGS=$(AR_FLAGS)" \
 	"CC_FOR_BUILD=$(CC_FOR_BUILD)" \
 	"CFLAGS=$(CFLAGS)" \
 	"CCASFLAGS=$(CCASFLAGS)" \
@@ -63,18 +63,28 @@ AM_MAKEFLAGS = \
 
 FLAGS_TO_PASS=$(AM_MAKEFLAGS)
 
-srcroot = $(top_srcdir)/..
+if HAVE_DOC
+DOCDIR = doc
+else
+DOCDIR =
+endif
+
+SUBDIRS = libc libm \
+	$(DOCDIR) . $(EXTRA_DIRS)
+
 tooldir = $(exec_prefix)/$(host_alias)
 toollibdir = $(tooldir)/lib$(MULTISUBDIR)
 
-# These are useful for standalone object files like crt0.o.
-AM_CFLAGS = $(AM_CFLAGS_$(subst /,_,$(@D))) $(AM_CFLAGS_$(subst /,_,$(@D)_$(<F)))
-AM_CCASFLAGS = $(AM_CCASFLAGS_$(subst /,_,$(@D))) $(AM_CCASFLAGS_$(subst /,_,$(@D)_$(<F)))
-AM_CPPFLAGS = $(NEWLIB_CFLAGS) $(TARGET_CFLAGS) $(AM_CPPFLAGS_$(subst /,_,$(@D))) $(AM_CPPFLAGS_$(subst /,_,$(@D)_$(<F))) -idirafter $(srcroot)/include
+AR_FLAGS = rc
 
+noinst_DATA = stmp-targ-include
+
+if USE_LIBTOOL
+toollib_LTLIBRARIES = libm.la \
+	libc.la
+else
 toollib_LIBRARIES = libm.a \
 	libc.a
-noinst_DATA += libg.a
 if HAVE_MULTISUBDIR
 BUILD_MULTISUBDIR = $(builddir)$(MULTISUBDIR)
 if HAVE_CRT0
@@ -82,184 +92,218 @@ noinst_DATA += $(BUILD_MULTISUBDIR)/$(CRT0)
 endif
 noinst_DATA += $(BUILD_MULTISUBDIR)/libc.a $(BUILD_MULTISUBDIR)/libm.a
 endif
+endif
 
 toollib_DATA = $(CRT0) $(CRT1)
-
-CLEANFILES += libg.a
-
-## GNU ar has undocumented behavior when specifying the same name multiple times
-## in a single invocation, so we have to dedupe ourselves.  The algorithm here:
-## - Generates the set of unique objects based on the basename.
-## - Favors objects later in the list (since machine objects come last).
-## - Outputs object list in same order as input for reproducibility.
-## https://sourceware.org/PR28917
-AWK_UNIQUE_OBJS = $(AWK) '{ \
-  for (i = NF; i > 0; --i) { \
-    count = split($$i, parts, "/"); \
-    name = parts[count]; \
-    if (!(name in seen)) { \
-      objs[i] = $$i; \
-      seen[name] = 1; \
-    } \
-  } \
-  for (i in objs) \
-    print objs[i]; \
-}'
-
-# Recursive Wildcard function
-rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2)$(filter $(subst *,%,$2),$d))
 
 # The functions ldexp, frexp and modf are traditionally supplied in
 # both libc.a and libm.a.  We build them in libm.a and copy them over,
 # along with some required supporting routines.
 MATHOBJS_IN_LIBC = \
-	libm_a-s_fpclassify.o libm_a-sf_fpclassify.o \
-	libm_a-s_isinf.o libm_a-sf_isinf.o \
-	libm_a-s_isnan.o libm_a-sf_isnan.o \
-	libm_a-s_isinfd.o libm_a-sf_isinff.o \
-	libm_a-s_isnand.o libm_a-sf_isnanf.o \
-	libm_a-s_nan.o libm_a-sf_nan.o \
-	libm_a-s_ldexp.o libm_a-sf_ldexp.o \
-	libm_a-s_frexp.o libm_a-sf_frexp.o libm_a-frexpl.o \
-	libm_a-s_modf.o \
-	libm_a-sf_modf.o libm_a-s_scalbn.o \
-	libm_a-sf_scalbn.o \
-	libm_a-s_finite.o libm_a-sf_finite.o \
-	libm_a-s_copysign.o libm_a-sf_copysign.o
+	$(lpfx)s_fpclassify.$(oext) $(lpfx)sf_fpclassify.$(oext) \
+	$(lpfx)s_isinf.$(oext) $(lpfx)sf_isinf.$(oext) \
+	$(lpfx)s_isnan.$(oext) $(lpfx)sf_isnan.$(oext) \
+	$(lpfx)s_isinfd.$(oext) $(lpfx)sf_isinff.$(oext) \
+	$(lpfx)s_isnand.$(oext) $(lpfx)sf_isnanf.$(oext) \
+	$(lpfx)s_nan.$(oext) $(lpfx)sf_nan.$(oext) \
+	$(lpfx)s_ldexp.$(oext) $(lpfx)sf_ldexp.$(oext) \
+	$(lpfx)s_frexp.$(oext) $(lpfx)sf_frexp.$(oext) \
+	$(lpfx)s_modf.$(oext) \
+	$(lpfx)sf_modf.$(oext) $(lpfx)s_scalbn.$(oext) \
+	$(lpfx)sf_scalbn.$(oext) \
+	$(lpfx)s_finite.$(oext) $(lpfx)sf_finite.$(oext) \
+	$(lpfx)s_copysign.$(oext) $(lpfx)sf_copysign.$(oext)
 
-## Place the libm_a objects in libc/ to keep the top dir tidy.
-stamp-libc-math-objects: libm.a
-	$(AM_V_GEN)cd libc && $(AR) x ../$< $(MATHOBJS_IN_LIBC)
-	$(AM_V_at)touch $@
+LIBC_OBJECTLISTS = \
+	$(POSIX_OBJECTLIST) \
+	$(SIGNAL_OBJECTLIST) \
+	$(SYSCALL_OBJECTLIST) \
+	$(UNIX_OBJECTLIST) \
+	$(STDIO64_OBJECTLIST) \
+	libc/argz/objectlist.awk.in \
+	libc/stdlib/objectlist.awk.in \
+	libc/time/objectlist.awk.in \
+	libc/ctype/objectlist.awk.in \
+	libc/search/objectlist.awk.in \
+	libc/string/objectlist.awk.in \
+	libc/locale/objectlist.awk.in \
+	libc/misc/objectlist.awk.in \
+	libc/reent/objectlist.awk.in \
+	libc/errno/objectlist.awk.in \
+	libc/stdio/objectlist.awk.in \
+	$(MACHINE_OBJECTLIST) \
+	$(SYS_OBJECTLIST) \
+	$(SYS_MACH_OBJECTLIST)
 
-CLEANFILES += $(MATHOBJS_IN_LIBC)
+LIBM_OBJECTLISTS = \
+	libm/$(MATHDIR)/objectlist.awk.in \
+	libm/common/objectlist.awk.in \
+	$(LIBM_MACHINE_OBJECTLIST)
 
-libc_a_SOURCES =
-libc_a_CFLAGS = $(AM_CFLAGS) $(libc_a_CFLAGS_$(subst /,_,$(@D))) $(libc_a_CFLAGS_$(subst /,_,$(@D)_$(<F)))
-libc_a_CCASFLAGS = $(AM_CCASFLAGS) $(libc_a_CCASFLAGS_$(subst /,_,$(@D))) $(libc_a_CCASFLAGS_$(subst /,_,$(@D)_$(<F)))
-libc_a_CPPFLAGS = $(AM_CPPFLAGS) $(libc_a_CPPFLAGS_$(subst /,_,$(@D))) $(libc_a_CPPFLAGS_$(subst /,_,$(@D)_$(<F)))
-libc_a_DEPENDENCIES = stamp-libc-math-objects
-## Best to avoid libc_a_LIBADD entirely to avoid having 2 independent lists
-## with separate overriding behavior (libc_a_OBJECTS is the other).  See the
-## AWK_UNIQUE_OBJS comment aove for more details.
-$(libc_a_OBJECTS) $(libc_a_LIBADD): stmp-targ-include
+libm_la_LDFLAGS = -version-info $(LIBTOOL_VERSION_INFO) -release newlib -no-undefined -Xcompiler -nostdlib -Xlinker --version-script=$(srcdir)/libc/sys/linux/shared.ld -lgcc -objectlist libm-libtool-objectlist
 
-libc.a: $(libc_a_OBJECTS) $(libc_a_DEPENDENCIES)
-	$(AM_V_at)rm -f $@
-	$(AM_V_AR)objs=`echo $(libc_a_OBJECTS) | $(AWK_UNIQUE_OBJS)` || exit $$?; \
-	  $(AR) $(ARFLAGS) $@ $$objs $(MATHOBJS_IN_LIBC:%=libc/%)
-	$(AM_V_at)$(RANLIB) $@
+libc_la_LDFLAGS = -version-info $(LIBTOOL_VERSION_INFO) -release newlib -no-undefined -Xcompiler -nostdlib -Xlinker --version-script=$(srcdir)/libc/sys/linux/shared.ld -lgcc -objectlist libc-libtool-objectlist
 
-libg.a: libc.a
-	$(AM_V_GEN)ln libc.a libg.a >/dev/null 2>/dev/null || cp libc.a libg.a
+if USE_LIBTOOL
+libm_la_SOURCES =
+libm_la_DEPENDENCIES = libm-libtool-objectlist
 
-libm_a_SOURCES =
-libm_a_CFLAGS = $(AM_CFLAGS) $(libm_a_CFLAGS_$(subst /,_,$(@D))) $(libm_a_CFLAGS_$(subst /,_,$(@D)_$(<F)))
-libm_a_CCASFLAGS = $(AM_CCASFLAGS) $(libm_a_CCASFLAGS_$(subst /,_,$(@D))) $(libm_a_CCASFLAGS_$(subst /,_,$(@D)_$(<F)))
-libm_a_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)/libm/common $(libm_a_CPPFLAGS_$(subst /,_,$(@D))) $(libm_a_CPPFLAGS_$(subst /,_,$(@D)_$(<F)))
-## Best to avoid libm_a_LIBADD entirely to avoid having 2 independent lists
-## with separate overriding behavior (libm_a_OBJECTS is the other).  See the
-## AWK_UNIQUE_OBJS comment aove for more details.
-$(libm_a_OBJECTS): stmp-targ-include
+# objects listed later in LIBM_OBJECTLISTS will override those listed earlier
+libm-libtool-objectlist: $(LIBM_OBJECTLISTS)
+	cat $(LIBM_OBJECTLISTS) | $(AWK) '{ libm[$$1] = $$2 }; END { for (x in libm) printf ("%s\n", libm[x]) }' > $@
 
-libm.a: $(libm_a_OBJECTS) $(libm_a_DEPENDENCIES)
-	$(AM_V_at)rm -f $@
-	$(AM_V_AR)objs=`echo $(libm_a_OBJECTS) | $(AWK_UNIQUE_OBJS)` || exit $$?; \
-	  $(AR) $(ARFLAGS) $@ $$objs
-	$(AM_V_at)$(RANLIB) $@
+libc_la_SOURCES =
+libc_la_DEPENDENCIES = libc-libtool-objectlist
+
+# objects listed later in LIBM_OBJECTLISTS and LIBC_OBJECTLISTS will override those listed earlier
+libc-libtool-objectlist: $(LIBM_OBJECTLISTS) $(LIBC_OBJECTLISTS)
+	cat $(LIBM_OBJECTLISTS) $(LIBC_OBJECTLISTS) |  $(AWK) '{ libc[$$1] = $$2 }; END { for (x in libc) printf ("%s\n", libc[x]) }' > $@
+
+else
+
+libc.a: libc/libc.a libm.a
+	rm -rf libc.a libg.a tmp
+	mkdir tmp
+	cd tmp; \
+	 $(AR) x ../libm.a $(MATHOBJS_IN_LIBC) ; \
+	 $(AR) x ../libc/libc.a ; \
+	 $(AR) $(AR_FLAGS) ../$@ *.o
+	$(RANLIB) libc.a
+	ln libc.a libg.a >/dev/null 2>/dev/null || cp libc.a libg.a
+	rm -rf tmp
+
+libc/libc.a: ; @true
+
+libm.a: libm/libm.a
+	rm -f $@
+	ln $< $@ >/dev/null 2>/dev/null || cp $< $@
+
+libm/libm.a: ; @true
+
+endif # USE_LIBTOOL
 
 if HAVE_MULTISUBDIR
 $(BUILD_MULTISUBDIR):
-	$(AM_V_at)$(MKDIR_P) $@
+	$(MKDIR_P) $@
 
 $(BUILD_MULTISUBDIR)/crt0.o: $(CRT0_DIR)$(CRT0) $(BUILD_MULTISUBDIR)
-	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)ln $< $@ >/dev/null 2>/dev/null || cp $< $@
+	rm -f $@
+	ln $< $@ >/dev/null 2>/dev/null || cp $< $@
 
 $(BUILD_MULTISUBDIR)/libc.a: libc.a $(BUILD_MULTISUBDIR)
-	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)ln $< $@ >/dev/null 2>/dev/null || cp $< $@
-
-$(BUILD_MULTISUBDIR)/libg.a: libg.a ${BUILD_MULTISUBDIR}
-	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)ln $< $@ >/dev/null 2>/dev/null || cp $< $@
+	rm -f $@ $(BUILD_MULTISUBDIR)/libg.a
+	ln $< $@ >/dev/null 2>/dev/null || cp $< $@
+	ln libg.a $(BUILD_MULTISUBDIR)/libg.a >/dev/null 2>/dev/null || \
+	cp libg.a $(BUILD_MULTISUBDIR)/libg.a
 
 $(BUILD_MULTISUBDIR)/libm.a: libm.a $(BUILD_MULTISUBDIR)
-	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)ln $< $@ >/dev/null 2>/dev/null || cp $< $@
+	rm -f $@
+	ln $< $@ >/dev/null 2>/dev/null || cp $< $@
 endif
 
 crt0.o: $(CRT0_DIR)$(CRT0)
-	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)ln $< $@ >/dev/null 2>/dev/null || cp $< $@
+	rm -f $@
+	ln $< $@ >/dev/null 2>/dev/null || cp $< $@
 
-$(CRT0_DIR)$(CRT0): stmp-targ-include
+$(CRT0_DIR)$(CRT0): ; @true
 
 crt1.o: $(CRT1_DIR)$(CRT1)
-	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)ln $< $@ >/dev/null 2>/dev/null || cp $< $@
+	rm -f $@
+	ln $< $@ >/dev/null 2>/dev/null || cp $< $@
 
-$(CRT1_DIR)$(CRT1): stmp-targ-include
+$(CRT1_DIR)$(CRT1): ; @true
 
 targ-include:
-	$(AM_V_GEN)$(MKDIR_P) $@
+	mkdir $@
 
 targ-include/newlib.h: targ-include/_newlib_version.h
 
 targ-include/sys targ-include/machine targ-include/bits: targ-include/_newlib_version.h targ-include/newlib.h
-	$(AM_V_GEN)$(MKDIR_P) $@
+	mkdir $@
 
 targ-include/newlib.h: newlib.h targ-include
-	$(AM_V_GEN)cp newlib.h $@
+	cp newlib.h $@
 
 targ-include/_newlib_version.h: _newlib_version.h targ-include
-	$(AM_V_GEN)cp _newlib_version.h $@
+	cp _newlib_version.h $@
+
+all-recursive: stmp-targ-include
 
 # The targ-include directory just holds the includes files for the
 # particular system and machine we have been configured for.  It is
 # used while building.
-TARG_INCLUDE_CP_DIR = \
-	; srcdir="$(srcdir)/libc/$$s"; dstdir="targ-include/$$d"; \
-	if (cd $$srcdir 2>/dev/null && [ "`echo *.h`" != "*.h" ]); then cp $$srcdir/*.h $$dstdir/; fi
 stmp-targ-include: config.status
-	$(AM_V_GEN)rm -rf targ-include stmp-targ-include
-	$(AM_V_at)$(MAKE) targ-include/sys \
+	-rm -rf targ-include stmp-targ-include
+	$(MAKE) targ-include/sys \
 		targ-include/machine \
 		targ-include/bits
-	$(AM_V_at)if [ -n "$(shared_machine_dir)" ]; then \
-	    s=machine/$(shared_machine_dir)/machine d=machine $(TARG_INCLUDE_CP_DIR) || exit $$?; \
-	    s=machine/$(shared_machine_dir)/sys d=sys $(TARG_INCLUDE_CP_DIR) || exit $$?; \
-	    s=machine/$(shared_machine_dir)/include d= $(TARG_INCLUDE_CP_DIR) || exit $$?; \
-	  fi
-	$(AM_V_at)s=machine/$(machine_dir)/machine d=machine $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)s=machine/$(machine_dir)/sys d=sys $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)for i in $(call rwildcard,$(srcdir)/libc/machine/$(machine_dir)/include/,*.h); do \
-	  f=`echo $$i | sed s:^$(srcdir)/libc/machine/$(machine_dir)/include/::`; \
-	  $(MKDIR_P) targ-include/`dirname $$f`; \
-	  cp $$i targ-include/$$f; \
-	done
-	$(AM_V_at)s=sys/$(sys_dir)/include d= $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)for i in $(call rwildcard,$(srcdir)/libc/sys/$(sys_dir)/include/,*.h); do \
-	  f=`echo $$i | sed s:^$(srcdir)/libc/sys/$(sys_dir)/include/::`; \
-	  $(MKDIR_P) targ-include/`dirname $$f`; \
-	  cp $$i targ-include/$$f; \
-	done
-	$(AM_V_at)s=sys/$(sys_dir)/sys d=sys $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)s=sys/$(sys_dir)/bits d=bits $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)s=sys/$(sys_dir)/machine d=machine $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)s=sys/$(sys_dir)/machine/$(machine_dir) d=machine $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)s=sys/$(sys_dir)/machine/$(machine_dir)/include d=machine $(TARG_INCLUDE_CP_DIR)
-	$(AM_V_at)$(MAKE) targ-include/newlib.h
-	$(AM_V_at)touch $@
+	-for i in $(srcdir)/libc/machine/$(machine_dir)/machine/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/machine/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/machine/$(machine_dir)/sys/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/sys/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/machine/$(machine_dir)/include/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/sys/$(sys_dir)/include/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/sys/$(sys_dir)/include/*; do \
+	    if [ -d $$i ]; then \
+		for j in $$i/*.h; do \
+		    if [ ! -d targ-include/`basename $$i` ]; then \
+		    	mkdir targ-include/`basename $$i`; \
+		    fi; \
+	      	    cp $$j targ-include/`basename $$i`/`basename $$j`; \
+		done \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/sys/$(sys_dir)/sys/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/sys/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/sys/$(sys_dir)/bits/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/bits/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/sys/$(sys_dir)/machine/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/machine/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/sys/$(sys_dir)/machine/$(machine_dir)/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/machine/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	-for i in $(srcdir)/libc/sys/$(sys_dir)/machine/$(machine_dir)/include/*.h; do \
+	    if [ -f $$i ]; then \
+	      cp $$i targ-include/machine/`basename $$i`; \
+	    else true; fi ; \
+	  done
+	$(MAKE) targ-include/newlib.h
+	touch $@
 
-CLEANFILES += stmp-targ-include
+CLEANFILES = stmp-targ-include
 
-## We hook install-multi because this Makefile doesn't have any exec targets,
-## only data targets.  If that ever changes, this should be removed and the
-## install-exec-local in ../multilib.am will kick in.
-install-data-local: install-toollibLIBRARIES install-multi $(INSTALL_DATA_LOCAL)
+install-data-local:	install-toollibLIBRARIES
+if USE_LIBTOOL
+else
 	rm -f $(DESTDIR)$(toollibdir)/libg.a
 	ln $(DESTDIR)$(toollibdir)/libc.a $(DESTDIR)$(toollibdir)/libg.a >/dev/null 2>/dev/null || cp $(DESTDIR)$(toollibdir)/libc.a $(DESTDIR)$(toollibdir)/libg.a
+endif
+	$(MULTIDO) $(AM_MAKEFLAGS) DO=install multi-do # $(MAKE)
 	-if [ -z "$(MULTISUBDIR)" ]; then \
 	  $(mkinstalldirs) $(DESTDIR)$(tooldir)/include; \
 	  for i in $(srcdir)/libc/include/*.h; do \
@@ -271,13 +315,6 @@ install-data-local: install-toollibLIBRARIES install-multi $(INSTALL_DATA_LOCAL)
 	  for i in $(srcdir)/libc/include/machine/*.h; do \
 	   $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/machine/`basename $$i`; \
 	  done; \
-	  if [ -n "$(shared_machine_dir)" ]; then \
-	    for i in $(srcdir)/libc/machine/$(shared_machine_dir)/machine/*.h; do \
-	      if [ -f $$i ]; then \
-	       $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/machine/`basename $$i`; \
-	      else true; fi ; \
-	    done; \
-	  fi ; \
 	  for i in $(srcdir)/libc/machine/$(machine_dir)/machine/*.h; do \
 	    if [ -f $$i ]; then \
 	     $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/machine/`basename $$i`; \
@@ -295,27 +332,15 @@ install-data-local: install-toollibLIBRARIES install-multi $(INSTALL_DATA_LOCAL)
 	  for i in $(srcdir)/libc/include/sys/*.h; do \
 	   $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/sys/`basename $$i`; \
 	  done; \
-	  if [ -n "$(shared_machine_dir)" ]; then \
-	    for i in $(srcdir)/libc/machine/$(shared_machine_dir)/sys/*.h; do \
-	      if [ -f $$i ]; then \
-	       $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/sys/`basename $$i`; \
-	      else true; fi ; \
-	    done ; \
-	    for i in $(srcdir)/libc/machine/$(shared_machine_dir)/include/*.h; do \
-	      if [ -f $$i ]; then \
-	       $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/`basename $$i`; \
-	      else true; fi ; \
-	    done ; \
-	  fi ; \
 	  for i in $(srcdir)/libc/machine/$(machine_dir)/sys/*.h; do \
 	    if [ -f $$i ]; then \
 	     $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/sys/`basename $$i`; \
 	    else true; fi ; \
 	  done ; \
-	  for i in $(call rwildcard,$(srcdir)/libc/machine/$(machine_dir)/include/,*.h); do \
-	    f=`echo $$i | sed s:^$(srcdir)/libc/machine/$(machine_dir)/::`; \
-	    $(MKDIR_P) $(DESTDIR)$(tooldir)/`dirname $$f`; \
-	    $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/`dirname $$f`; \
+	  for i in $(srcdir)/libc/machine/$(machine_dir)/include/*.h; do \
+	    if [ -f $$i ]; then \
+	     $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/`basename $$i`; \
+	    else true; fi ; \
 	  done ; \
 	  for i in $(srcdir)/libc/sys/$(sys_dir)/sys/*.h; do \
 	    if [ -f $$i ]; then \
@@ -333,10 +358,17 @@ install-data-local: install-toollibLIBRARIES install-multi $(INSTALL_DATA_LOCAL)
 	     $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/machine/`basename $$i`; \
 	    else true; fi ; \
 	  done ; \
-	  for i in $(call rwildcard,$(srcdir)/libc/sys/$(sys_dir)/include/,*.h); do \
-	    f=`echo $$i | sed s:^$(srcdir)/libc/sys/$(sys_dir)/::`; \
-	    $(MKDIR_P) $(DESTDIR)$(tooldir)/`dirname $$f`; \
-	    $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/`dirname $$f`; \
+	  for i in $(srcdir)/libc/sys/$(sys_dir)/include/*.h; do \
+	    if [ -f $$i ]; then \
+	     $(INSTALL_DATA) $$i $(DESTDIR)$(tooldir)/include/`basename $$i`; \
+	    else true; fi ; \
+	  done ; \
+	  for i in $(srcdir)/libc/sys/$(sys_dir)/include/*; do \
+	    if [ -d $$i ]; then \
+		for j in $$i/*.h; do \
+	            $(INSTALL_DATA) $$j $(DESTDIR)$(tooldir)/include/`basename $$i`/`basename $$j`; \
+		done ; \
+	    else true; fi ; \
 	  done ; \
 	  for i in $(srcdir)/libc/sys/$(sys_dir)/machine/$(machine_dir)/include/*.h; do \
 	    if [ -f $$i ]; then \
@@ -352,18 +384,61 @@ install-data-local: install-toollibLIBRARIES install-multi $(INSTALL_DATA_LOCAL)
 
 # Generate Unicode data tables for libc/string/wcwidth and libc/ctype/??w*
 unidata:
+	cd $(srcdir)/libc/string; ./mkunidata
+	cd $(srcdir)/libc/ctype; ./mkunidata
+
+unidate-download:
 	cd $(srcdir)/libc/string; ./mkunidata -u
 	cd $(srcdir)/libc/ctype; ./mkunidata -u
 
 # Force makedoc to be built before building info files.
-info-recursive dvi-recursive: doc/makedoc$(EXEEXT_FOR_BUILD)
+info-recursive: doc/makedoc
+dvi-recursive: doc/makedoc
+doc/makedoc:
+	cd doc && $(MAKE) all
+
+# Recursive targets for man and install-man
+man:
+	(cd doc && $(MAKE) man-cache) || exit 1; \
+	for d in $(SUBDIRS); do \
+	  if test "$$d" != "."; then \
+	    (cd $$d && $(MAKE) man) || exit 1; \
+	  fi; \
+	done
+
+install-man:
+	for d in $(SUBDIRS); do \
+	  if test "$$d" != "."; then \
+	    (cd $$d && $(MAKE) install-man) || exit 1; \
+	  fi; \
+	done
 
 CONFIG_STATUS_DEPENDENCIES = $(newlib_basedir)/configure.host
 
-include ../multilib.am
+# Multilib support.
+.PHONY: all-multi check-multi mostlyclean-multi clean-multi distclean-multi \
+	maintainer-clean-multi
 
+all-recursive: all-multi
+check-recursive: check-multi
+mostlyclean-recursive: mostlyclean-multi
+clean-recursive: clean-multi
+distclean-recursive: distclean-multi
+maintainer-clean-recursive: maintainer-clean-multi
+
+# The $(MAKE) comments below are to enable parallel building.
+all-multi:
+	$(MULTIDO) $(AM_MAKEFLAGS) DO=all multi-do # $(MAKE)
 check-multi:
 	$(MULTIDO) $(AM_MAKEFLAGS) DO=check multi-do # $(MAKE)
+mostlyclean-multi:
+	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=mostlyclean multi-clean # $(MAKE)
+clean-multi:
+	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=clean multi-clean # $(MAKE)
+distclean-multi:
+	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=distclean multi-clean # $(MAKE)
+maintainer-clean-multi:
+	$(MULTICLEAN) $(AM_MAKEFLAGS) DO=maintainer-clean multi-clean # $(MAKE)
 
 MAKEOVERRIDES=
 
@@ -433,20 +508,3 @@ check-DEJAGNU: site.exp
 
 clean-local:
 	-rm -rf targ-include newlib.h _newlib_version.h stamp-*
-
-# Workaround bad automake/texinfo interactions.
-# https://bugs.gnu.org/23599
-TEXI2DVI = texi2dvi -E
-
-TEXINFO_TEX = ../texinfo/texinfo.tex
-
-XMLTO_MAN_QUIET_=--stringparam man.output.quietly=1
-XMLTO_MAN_QUIET=$(XMLTO_MAN_QUIET_$(V))
-
-if HAVE_DOC
-include doc/Makefile.inc
-endif
-include libc/Makefile.inc
-include libm/Makefile.inc
-
-.PHONY: $(PHONY)

@@ -179,7 +179,7 @@ next:
 
 	case DEFAULT:
 		usedefault = 1;
-		fallthrough;
+		/* FALL THROUGH */
 
 	case MACH:
 		if (!usedefault) {
@@ -215,7 +215,7 @@ next:
 			break;
 		case PASSWD:
 			if ((*aname == 0 || strcmp(*aname, "anonymous")) &&
-			    fstat(fileno(cfile), &stb) >= 0 &&
+			    fstat64(fileno(cfile), &stb) >= 0 &&
 			    (stb.st_mode & 077) != 0) {
 	warnx("Error: .netrc file is readable by others.");
 	warnx("Remove password or make file unreadable by others.");
@@ -227,7 +227,7 @@ next:
 			}
 			break;
 		case ACCOUNT:
-			if (fstat(fileno(cfile), &stb) >= 0
+			if (fstat64(fileno(cfile), &stb) >= 0
 			    && (stb.st_mode & 077) != 0) {
 	warnx("Error: .netrc file is readable by others.");
 	warnx("Remove account or make file unreadable by others.");

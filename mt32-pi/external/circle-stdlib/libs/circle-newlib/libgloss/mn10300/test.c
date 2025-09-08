@@ -1,6 +1,4 @@
 #include <stdio.h>
-#include <unistd.h>
-#include <string.h>
 
 static void
 send_msg1 (void)

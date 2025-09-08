@@ -3,18 +3,10 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include "sys/syscall.h"
-#include <errno.h>
-#undef errno
-extern int errno;
-
-void abort (void) __attribute__((__noreturn__));
-
-extern int __trap34 (int function, ...);
+int errno;
 
 /* This is used by _sbrk.  */
 register char *stack_ptr asm ("r15");
-
-extern int main (int, char**);
 
 int
 _read (int file,
@@ -101,38 +93,34 @@ _unlink ()
   return -1;
 }
 
-int
-isatty (int fd)
+isatty (fd)
+     int fd;
 {
   return 1;
 }
 
-int
-_isatty (int fd)
+_isatty (fd)
+     int fd;
 {
   return 1;
 }
 
-_ATTRIBUTE ((__noreturn__)) void
-_exit (int n)
+
+_exit (n)
 {
-  __trap34 (SYS_exit, n, 0, 0);
+  return __trap34 (SYS_exit, n, 0, 0);
 }
 
-int
-_kill (int pid,
-       int sig)
+_kill (n, m)
 {
   return __trap34 (SYS_exit, 0xdead, 0, 0);
 }
 
-int
-_getpid ()
+_getpid (n)
 {
   return 1;
 }
 
-void
 _raise ()
 {
 }
@@ -157,8 +145,9 @@ _chown (const char *path, short owner, short group)
 }
 
 int
-_utime (const char *path,
-        char *times)
+_utime (path, times)
+     const char *path;
+     char *times;
 {
   return __trap34 (SYS_utime, path, times);
 }
@@ -170,7 +159,8 @@ _fork ()
 }
 
 int
-_wait (int *statusp)
+_wait (statusp)
+     int *statusp;
 {
   return __trap34 (SYS_wait);
 }

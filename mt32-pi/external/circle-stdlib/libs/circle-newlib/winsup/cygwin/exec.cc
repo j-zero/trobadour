@@ -32,7 +32,7 @@ execl (const char *path, const char *arg0, ...)
       argv[i] = va_arg (args, const char *);
   while (argv[i++] != NULL);
   va_end (args);
-  return spawnve (_P_OVERLAY, path, (char * const  *) argv, environ);
+  return spawnve (_P_OVERLAY, path, (char * const  *) argv, cur_environ ());
 }
 
 extern "C" int
@@ -71,13 +71,13 @@ execlp (const char *file, const char *arg0, ...)
   va_end (args);
   return spawnve (_P_OVERLAY | _P_PATH_TYPE_EXEC,
 		  find_exec (file, buf, "PATH", FE_NNF) ?: "",
-		  (char * const  *) argv, environ);
+		  (char * const  *) argv, cur_environ ());
 }
 
 extern "C" int
 execv (const char *path, char * const *argv)
 {
-  return spawnve (_P_OVERLAY, path, argv, environ);
+  return spawnve (_P_OVERLAY, path, argv, cur_environ ());
 }
 
 extern "C" int
@@ -85,6 +85,7 @@ execve (const char *path, char *const argv[], char *const envp[])
 {
   return spawnve (_P_OVERLAY, path, argv, envp);
 }
+EXPORT_ALIAS (execve, _execve)	/* For newlib */
 
 extern "C" int
 execvp (const char *file, char * const *argv)
@@ -93,7 +94,7 @@ execvp (const char *file, char * const *argv)
 
   return spawnve (_P_OVERLAY | _P_PATH_TYPE_EXEC,
 		  find_exec (file, buf, "PATH", FE_NNF) ?: "",
-		  argv, environ);
+		  argv, cur_environ ());
 }
 
 extern "C" int
@@ -125,5 +126,3 @@ sexecve_is_bad ()
   set_errno (ENOSYS);
   return 0;
 }
-
-EXPORT_ALIAS (execve, _execve)	/* For newlib */

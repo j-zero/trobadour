@@ -1,3 +1,9 @@
-LIB_OBJS = l2_packet_linux.o
+all:
+	@echo Nothing to be made.
 
-include ../lib.rules
+clean:
+	for d in $(SUBDIRS); do make -C $$d clean; done
+	rm -f *~ *.o *.d
+
+install:
+	@echo Nothing to be made.

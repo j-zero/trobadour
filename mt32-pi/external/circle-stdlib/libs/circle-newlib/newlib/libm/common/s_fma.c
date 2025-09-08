@@ -38,8 +38,6 @@ ANSI C, POSIX.
 
 #include "fdlibm.h"
 
-#if !HAVE_FAST_FMA
-
 #ifndef _DOUBLE_IS_32BITS
 
 #ifdef __STDC__
@@ -56,5 +54,3 @@ ANSI C, POSIX.
 }
 
 #endif /* _DOUBLE_IS_32BITS */
-
-#endif /* !HAVE_FAST_FMA */

@@ -5,9 +5,39 @@
 *.sln
 *.vcxproj
 
+aes/crypt_and_hash
+hash/generic_sum
+hash/hello
 hash/md5sum
 hash/sha1sum
 hash/sha2sum
+pkey/dh_client
+pkey/dh_genprime
+pkey/dh_server
+pkey/ecdh_curve25519
+pkey/ecdsa
+pkey/gen_key
+pkey/key_app
+pkey/key_app_writer
+pkey/mpi_demo
+pkey/pk_decrypt
+pkey/pk_encrypt
+pkey/pk_sign
+pkey/pk_verify
+pkey/rsa_decrypt
+pkey/rsa_encrypt
+pkey/rsa_genkey
+pkey/rsa_sign
+pkey/rsa_sign_pss
+pkey/rsa_verify
+pkey/rsa_verify_pss
+psa/crypto_examples
+psa/key_ladder_demo
+psa/psa_constant_names
+psa/psa_hash
+random/gen_entropy
+random/gen_random_ctr_drbg
+random/gen_random_havege
 ssl/dtls_client
 ssl/dtls_server
 ssl/mini_client
@@ -19,13 +49,13 @@ ssl/ssl_mail_client
 ssl/ssl_pthread_server
 ssl/ssl_server
 ssl/ssl_server2
+test/benchmark
 test/cpp_dummy_build
 test/cpp_dummy_build.cpp
 test/dlopen
 test/ecp-bench
 test/metatest
 test/query_compile_time_config
-test/query_included_headers
 test/selftest
 test/ssl_cert_test
 test/udp_proxy
@@ -39,10 +69,5 @@ x509/crl_app
 x509/load_roots
 x509/req_app
 
-###START_GENERATED_FILES###
-# Generated source files
-/test/query_config.c
-
-# Generated data files
+# generated files
 pkey/keyfile.key
-###END_GENERATED_FILES###

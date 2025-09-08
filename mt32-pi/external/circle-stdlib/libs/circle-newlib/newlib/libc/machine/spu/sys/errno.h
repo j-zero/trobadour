@@ -27,6 +27,7 @@ extern "C" {
 
 #include <sys/reent.h>
 
+extern struct _reent _impure_data;
 #define errno (_impure_data._errno)
 
 /* Please don't use these variables directly.
@@ -34,7 +35,7 @@ extern "C" {
 extern const char * const _sys_errlist[];
 extern int _sys_nerr;
 
-#define __errno_r(ptr) _REENT_ERRNO(ptr)
+#define __errno_r(ptr) ((ptr)->_errno)
 
 /* Adjusted to the linux asm/errno.h */
 #define	EPERM		 1	/* Operation not permitted */

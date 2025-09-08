@@ -20,13 +20,12 @@ extern char inbyte (void);
  * read  -- read bytes from the serial port. Ignore fd, since
  *          we only have stdin.
  */
-_READ_WRITE_RETURN_TYPE
+int
 read (int fd,
-       void *buf_,
-       size_t nbytes)
+       char *buf,
+       int nbytes)
 {
   int i = 0;
-  char *buf = buf_;
 
   for (i = 0; i < nbytes; i++) {
     *(buf + i) = inbyte();

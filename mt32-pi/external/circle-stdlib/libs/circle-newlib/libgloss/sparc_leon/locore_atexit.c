@@ -37,9 +37,9 @@ atexit (void (*fn) (void))
 {
   register struct _atexit *p;
 
-  p = __atexit;
+  p = _GLOBAL_REENT->_atexit;
   if (p == NULL)
-    __atexit = p = &__atexit0;
+    _GLOBAL_REENT->_atexit = p = &_GLOBAL_REENT->_atexit0;
   if (p->_ind >= _ATEXIT_SIZE)
     {
       return -1;

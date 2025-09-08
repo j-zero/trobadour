@@ -74,7 +74,7 @@ details. */
 })
 
 #define set_handle_or_return_if_not_open(h, s) \
-  h = (s)->fh->get_handle (); \
+  h = (s)->fh->get_handle_cyg (); \
   if (cygheap->fdtab.not_open ((s)->fd)) \
     { \
       (s)->thread_errno =  EBADF; \
@@ -289,7 +289,7 @@ select_record::dump_select_record ()
 		 read_ready, write_ready, except_ready);
   select_printf ("read_selected %d, write_selected %d, except_selected %d, except_on_write %d",
 		 read_selected, write_selected, except_selected, except_on_write);
-
+                    
   select_printf ("startup %p, peek %p, verify %p cleanup %p, next %p",
 		 startup, peek, verify, cleanup, next);
 }
@@ -469,7 +469,7 @@ was_timeout:
 	  pthread::static_cancel_self ();
 	  /*NOTREACHED*/
 	}
-      fallthrough;
+      /*FALLTHRU*/
     default:
       /* Timer event? */
       if (wait_ret == timer_idx)
@@ -527,10 +527,7 @@ set_bits (select_record *me, fd_set *readfds, fd_set *writefds,
 	  /* Set readfds entry in case of a failed connect. */
 	  if (!me->read_ready && me->read_selected
 	      && sock->connect_state () == connect_failed)
-	    {
-	      UNIX_FD_SET (me->fd, readfds);
-	      ready++;
-	    }
+	    UNIX_FD_SET (me->fd, readfds);
 	}
       ready++;
     }
@@ -584,21 +581,15 @@ no_verify (select_record *, fd_set *, fd_set *, fd_set *)
   return 0;
 }
 
-ssize_t
-pipe_data_available (int fd, fhandler_base *fh, HANDLE h, int flags)
+static int
+pipe_data_available (int fd, fhandler_base *fh, HANDLE h, bool writing)
 {
-  if (fh->get_device () == FH_PIPER)
-    {
-      DWORD nbytes_in_pipe;
-      if (!(flags & PDA_WRITE)
-	  && PeekNamedPipe (h, NULL, 0, NULL, &nbytes_in_pipe, NULL))
-	return nbytes_in_pipe;
-      return -1;
-    }
-
   IO_STATUS_BLOCK iosb = {{0}, 0};
   FILE_PIPE_LOCAL_INFORMATION fpli = {0};
   NTSTATUS status;
+
+  if (fh->has_ongoing_io ())
+    return 0;
 
   status = NtQueryInformationFile (h, &iosb, &fpli, sizeof (fpli),
 				   FilePipeLocalInformation);
@@ -610,73 +601,39 @@ pipe_data_available (int fd, fhandler_base *fh, HANDLE h, int flags)
 	 access on the write end.  */
       select_printf ("fd %d, %s, NtQueryInformationFile failed, status %y",
 		     fd, fh->get_name (), status);
-      switch (flags)
-	{
-	case PDA_WRITE:
-	  return 1;
-	case PDA_SELECT | PDA_WRITE:
-	  return PIPE_BUF;
-	default:
-	  return -1;
-	}
+      return writing ? 1 : -1;
     }
-  if (flags & PDA_WRITE)
+  if (writing)
     {
-      /* If there is anything available in the pipe buffer then signal
-        that.  This means that a pipe could still block since you could
-        be trying to write more to the pipe than is available in the
-        buffer but that is the hazard of select().
-
-        Note that WriteQuotaAvailable is unreliable.
-
-        Usually WriteQuotaAvailable on the write side reflects the space
-        available in the inbound buffer on the read side.  However, if a
-        pipe read is currently pending, WriteQuotaAvailable on the write side
-        is decremented by the number of bytes the read side is requesting.
-        So it's possible (even likely) that WriteQuotaAvailable is 0, even
-        if the inbound buffer on the read side is not full.  This can lead to
-        a deadlock situation: The reader is waiting for data, but select
-        on the writer side assumes that no space is available in the read
-        side inbound buffer.
-
-	Consequentially, there are two possibilities when WriteQuotaAvailable
-	is 0. One is that the buffer is really full. The other is that the
-	reader is currently trying to read the pipe and it is pending.
-	In the latter case, the fact that the reader cannot read the data
-	immediately means that the pipe is empty. In the former case,
-	NtSetInformationFile() in set_pipe_non_blocking(true) will fail
-	with STATUS_PIPE_BUSY, while it succeeds in the latter case.
-	Therefore, we can distinguish these cases by calling set_pipe_non_
-	blocking(true). If it returns success, the pipe is empty, so we
-	return the pipe buffer size. Otherwise, we return 0. */
-      if (fh->get_device () == FH_PIPEW && fpli.WriteQuotaAvailable == 0)
-	{
-	  NTSTATUS status =
-	    ((fhandler_pipe *) fh)->set_pipe_non_blocking (true);
-	  if (status == STATUS_PIPE_BUSY)
-	    return 0; /* Full */
-	  else if (!NT_SUCCESS (status))
-	    /* We cannot know actual write pipe space. */
-	    return (flags & PDA_SELECT) ? PIPE_BUF : 1;
-	  /* Restore pipe mode to blocking mode */
-	  ((fhandler_pipe *) fh)->set_pipe_non_blocking (false);
-	  /* Empty */
-	  fpli.WriteQuotaAvailable = fpli.InboundQuota;
-	}
+	/* If there is anything available in the pipe buffer then signal
+	   that.  This means that a pipe could still block since you could
+	   be trying to write more to the pipe than is available in the
+	   buffer but that is the hazard of select().  */
+      fpli.WriteQuotaAvailable = fpli.OutboundQuota - fpli.ReadDataAvailable;
       if (fpli.WriteQuotaAvailable > 0)
 	{
 	  paranoid_printf ("fd %d, %s, write: size %u, avail %u", fd,
-			   fh->get_name (), fpli.InboundQuota,
+			   fh->get_name (), fpli.OutboundQuota,
 			   fpli.WriteQuotaAvailable);
-	  return fpli.WriteQuotaAvailable;
+	  return 1;
 	}
-      /* TODO: Buffer really full or non-Cygwin reader? */
+      /* If we somehow inherit a tiny pipe (size < PIPE_BUF), then consider
+	 the pipe writable only if it is completely empty, to minimize the
+	 probability that a subsequent write will block.  */
+      if (fpli.OutboundQuota < PIPE_BUF
+	  && fpli.WriteQuotaAvailable == fpli.OutboundQuota)
+	{
+	  select_printf ("fd, %s, write tiny pipe: size %u, avail %u",
+			 fd, fh->get_name (), fpli.OutboundQuota,
+			 fpli.WriteQuotaAvailable);
+	  return 1;
+	}
     }
   else if (fpli.ReadDataAvailable)
     {
       paranoid_printf ("fd %d, %s, read avail %u", fd, fh->get_name (),
 		       fpli.ReadDataAvailable);
-      return fpli.ReadDataAvailable;
+      return 1;
     }
   if (fpli.NamedPipeState & FILE_PIPE_CLOSING_STATE)
     return -1;
@@ -724,10 +681,10 @@ peek_pipe (select_record *s, bool from_select)
 	  gotone = s->read_ready = true;
 	  goto out;
 	}
-      ssize_t n = pipe_data_available (s->fd, fh, h, PDA_SELECT);
+      int n = pipe_data_available (s->fd, fh, h, false);
       /* On PTY masters, check if input from the echo pipe is available. */
       if (n == 0 && fh->get_echo_handle ())
-	n = pipe_data_available (s->fd, fh, fh->get_echo_handle (), PDA_SELECT);
+	n = pipe_data_available (s->fd, fh, fh->get_echo_handle (), false);
 
       if (n < 0)
 	{
@@ -753,33 +710,18 @@ peek_pipe (select_record *s, bool from_select)
     }
 
 out:
-  if (fh->get_major () == DEV_PTYM_MAJOR)
-    {
-      fhandler_pty_master *fhm = (fhandler_pty_master *) fh;
-      fhm->set_mask_flusho (s->read_ready);
-    }
-  h = fh->get_output_handle ();
+  h = fh->get_output_handle_cyg ();
   if (s->write_selected && dev != FH_PIPER)
     {
-      if (dev == FH_PIPEW && ((fhandler_pipe *) fh)->reader_closed ())
-	{
-	  gotone += s->write_ready = true;
-	  if (s->except_selected)
-	    gotone += s->except_ready = true;
-	  return gotone;
-	}
-      ssize_t n = pipe_data_available (s->fd, fh, h, PDA_SELECT | PDA_WRITE);
-      select_printf ("write: %s, n %d", fh->get_name (), n);
-      gotone += s->write_ready = (n >= PIPE_BUF);
-      if (n < 0 && s->except_selected)
-	gotone += s->except_ready = true;
+      gotone += s->write_ready =  pipe_data_available (s->fd, fh, h, true);
+      select_printf ("write: %s, gotone %d", fh->get_name (), gotone);
     }
   return gotone;
 }
 
 static int start_thread_pipe (select_record *me, select_stuff *stuff);
 
-static DWORD
+static DWORD WINAPI
 thread_pipe (void *arg)
 {
   select_pipe_info *pi = (select_pipe_info *) arg;
@@ -802,7 +744,7 @@ thread_pipe (void *arg)
 	  }
       if (!looping)
 	break;
-      cygwait (pi->bye, sleep_time >> 3);
+      Sleep (sleep_time >> 3);
       if (sleep_time < 80)
 	++sleep_time;
       if (pi->stop_thread)
@@ -821,13 +763,6 @@ start_thread_pipe (select_record *me, select_stuff *stuff)
     {
       pi->start = &stuff->start;
       pi->stop_thread = false;
-      pi->bye = me->fh->get_select_sem ();
-      if (pi->bye)
-	DuplicateHandle (GetCurrentProcess (), pi->bye,
-			 GetCurrentProcess (), &pi->bye,
-			 0, 0, DUPLICATE_SAME_ACCESS);
-      else
-	pi->bye = CreateSemaphore (&sec_none_nih, 0, INT32_MAX, NULL);
       pi->thread = new cygthread (thread_pipe, pi, "pipesel");
       me->h = *pi->thread;
       if (!me->h)
@@ -845,9 +780,7 @@ pipe_cleanup (select_record *, select_stuff *stuff)
   if (pi->thread)
     {
       pi->stop_thread = true;
-      ReleaseSemaphore (pi->bye, get_obj_handle_count (pi->bye), NULL);
       pi->thread->detach ();
-      CloseHandle (pi->bye);
     }
   delete pi;
   stuff->device_specific_pipe = NULL;
@@ -930,70 +863,45 @@ peek_fifo (select_record *s, bool from_select)
 	  goto out;
 	}
 
-      fh->reading_lock ();
-      if (fh->take_ownership (1) < 0)
-	{
-	  fh->reading_unlock ();
-	  goto out;
-	}
-      fh->fifo_client_lock ();
-      int nconnected = 0;
-      for (int i = 0; i < fh->get_nhandlers (); i++)
-	{
-	  fifo_client_handler &fc = fh->get_fc_handler (i);
-	  fifo_client_connect_state prev_state = fc.query_and_set_state ();
-	  if (fc.get_state () >= fc_connected)
-	    {
-	      nconnected++;
-	      if (prev_state == fc_listening)
-		/* The connection was not recorded by the fifo_reader_thread. */
-		fh->record_connection (fc, false);
-	      if (fc.get_state () == fc_input_avail)
-		{
-		  select_printf ("read: %s, ready for read", fh->get_name ());
-		  fh->fifo_client_unlock ();
-		  fh->reading_unlock ();
-		  gotone += s->read_ready = true;
-		  goto out;
-		}
-	    }
-	}
-      fh->fifo_client_unlock ();
-      /* According to POSIX and the Linux man page, we're supposed to
-	 report read ready if the FIFO is at EOF, i.e., if the pipe is
-	 empty and there are no writers.  But there seems to be an
-	 undocumented exception, observed on Linux and other platforms
-	 (https://cygwin.com/pipermail/cygwin/2022-September/252223.html):
-	 If no writer has ever been opened, then we do not report read
-	 ready.  This can happen if a reader is opened with O_NONBLOCK
-	 before any writers have opened.  To be consistent with other
-	 platforms, we use a special EOF test that returns false if
-	 there's never been a writer opened. */
-      if (!nconnected && fh->select_hit_eof ())
+      if (fh->hit_eof ())
 	{
 	  select_printf ("read: %s, saw EOF", fh->get_name ());
-	  gotone += s->read_ready = true;
+	  gotone = s->read_ready = true;
 	  if (s->except_selected)
 	    gotone += s->except_ready = true;
+	  goto out;
 	}
-      fh->reading_unlock ();
+
+      fh->fifo_client_lock ();
+      for (int i = 0; i < fh->get_nhandlers (); i++)
+	if (fh->is_connected (i))
+	  {
+	    int n = pipe_data_available (s->fd, fh, fh->get_fc_handle (i),
+					 false);
+	    if (n > 0)
+	      {
+		select_printf ("read: %s, ready for read: avail %d, client %d",
+			       fh->get_name (), n, i);
+		fh->fifo_client_unlock ();
+		gotone += s->read_ready = true;
+		goto out;
+	      }
+	  }
+      fh->fifo_client_unlock ();
     }
 out:
   if (s->write_selected)
     {
-      ssize_t n = pipe_data_available (s->fd, fh, fh->get_handle (),
-				       PDA_SELECT | PDA_WRITE);
-      select_printf ("write: %s, n %d", fh->get_name (), n);
-      gotone += s->write_ready = (n >= PIPE_BUF);
-      if (n < 0 && s->except_selected)
-	gotone += s->except_ready = true;
+      gotone += s->write_ready
+	= pipe_data_available (s->fd, fh, fh->get_handle (), true);
+      select_printf ("write: %s, gotone %d", fh->get_name (), gotone);
     }
   return gotone;
 }
 
 static int start_thread_fifo (select_record *me, select_stuff *stuff);
 
-static DWORD
+static DWORD WINAPI
 thread_fifo (void *arg)
 {
   select_fifo_info *pi = (select_fifo_info *) arg;
@@ -1016,7 +924,7 @@ thread_fifo (void *arg)
 	  }
       if (!looping)
 	break;
-      cygwait (pi->bye, sleep_time >> 3);
+      Sleep (sleep_time >> 3);
       if (sleep_time < 80)
 	++sleep_time;
       if (pi->stop_thread)
@@ -1035,13 +943,6 @@ start_thread_fifo (select_record *me, select_stuff *stuff)
     {
       pi->start = &stuff->start;
       pi->stop_thread = false;
-      pi->bye = me->fh->get_select_sem ();
-      if (pi->bye)
-	DuplicateHandle (GetCurrentProcess (), pi->bye,
-			 GetCurrentProcess (), &pi->bye,
-			 0, 0, DUPLICATE_SAME_ACCESS);
-      else
-	pi->bye = CreateSemaphore (&sec_none_nih, 0, INT32_MAX, NULL);
       pi->thread = new cygthread (thread_fifo, pi, "fifosel");
       me->h = *pi->thread;
       if (!me->h)
@@ -1059,9 +960,7 @@ fifo_cleanup (select_record *, select_stuff *stuff)
   if (pi->thread)
     {
       pi->stop_thread = true;
-      ReleaseSemaphore (pi->bye, get_obj_handle_count (pi->bye), NULL);
       pi->thread->detach ();
-      CloseHandle (pi->bye);
     }
   delete pi;
   stuff->device_specific_fifo = NULL;
@@ -1140,24 +1039,13 @@ peek_console (select_record *me, bool)
   HANDLE h;
   set_handle_or_return_if_not_open (h, me);
 
-  fh->acquire_input_mutex (mutex_timeout);
   while (!fh->input_ready && !fh->get_cons_readahead_valid ())
     {
       if (fh->bg_check (SIGTTIN, true) <= bg_eof)
-	{
-	  fh->release_input_mutex ();
-	  return me->read_ready = true;
-	}
-      else
-	{
-	  acquire_attach_mutex (mutex_timeout);
-	  DWORD resume_pid = fh->attach_console (fh->get_owner ());
-	  BOOL r = PeekConsoleInputW (h, &irec, 1, &events_read);
-	  fh->detach_console (resume_pid, fh->get_owner ());
-	  release_attach_mutex ();
-	  if (!r || !events_read)
-	    break;
-	}
+	return me->read_ready = true;
+      else if (!PeekConsoleInputW (h, &irec, 1, &events_read) || !events_read)
+	break;
+      fh->acquire_input_mutex (INFINITE);
       if (fhandler_console::input_winch == fh->process_input_message ()
 	  && global_sigs[SIGWINCH].sa_handler != SIG_IGN
 	  && global_sigs[SIGWINCH].sa_handler != SIG_DFL)
@@ -1166,8 +1054,8 @@ peek_console (select_record *me, bool)
 	  fh->release_input_mutex ();
 	  return -1;
 	}
+      fh->release_input_mutex ();
     }
-  fh->release_input_mutex ();
   if (fh->input_ready || fh->get_cons_readahead_valid ())
     return me->read_ready = true;
 
@@ -1181,95 +1069,21 @@ verify_console (select_record *me, fd_set *rfds, fd_set *wfds,
   return peek_console (me, true);
 }
 
-static int console_startup (select_record *me, select_stuff *stuff);
-
-static DWORD
-thread_console (void *arg)
-{
-  select_console_info *ci = (select_console_info *) arg;
-  DWORD sleep_time = 0;
-  bool looping = true;
-
-  while (looping)
-    {
-      for (select_record *s = ci->start; (s = s->next); )
-	if (s->startup == console_startup)
-	  {
-	    if (peek_console (s, true))
-	      looping = false;
-	    if (ci->stop_thread)
-	      {
-		select_printf ("stopping");
-		looping = false;
-		break;
-	      }
-	  }
-      if (!looping)
-	break;
-      cygwait (ci->bye, sleep_time >> 3);
-      if (sleep_time < 80)
-	++sleep_time;
-      if (ci->stop_thread)
-	break;
-    }
-  return 0;
-}
-
-static int
-console_startup (select_record *me, select_stuff *stuff)
-{
-  select_console_info *ci = stuff->device_specific_console;
-  if (ci->start)
-    me->h = *(stuff->device_specific_console)->thread;
-  else
-    {
-      ci->start = &stuff->start;
-      ci->stop_thread = false;
-      ci->bye = CreateEvent (&sec_none_nih, TRUE, FALSE, NULL);
-      ci->thread = new cygthread (thread_console, ci, "conssel");
-      me->h = *ci->thread;
-      if (!me->h)
-	return 0;
-    }
-  return 1;
-}
-
-static void
-console_cleanup (select_record *me, select_stuff *stuff)
-{
-  select_console_info *ci = stuff->device_specific_console;
-  if (!ci)
-    return;
-  if (ci->thread)
-    {
-      ci->stop_thread = true;
-      SetEvent (ci->bye);
-      ci->thread->detach ();
-      CloseHandle (ci->bye);
-    }
-  delete ci;
-  stuff->device_specific_console = NULL;
-}
-
 select_record *
 fhandler_console::select_read (select_stuff *ss)
 {
-  if (!ss->device_specific_console
-      && (ss->device_specific_console = new select_console_info) == NULL)
-    return NULL;
-
   select_record *s = ss->start.next;
   if (!s->startup)
     {
-      s->startup = console_startup;
+      s->startup = no_startup;
       s->verify = verify_console;
       set_cursor_maybe ();
     }
 
   s->peek = peek_console;
+  s->h = get_handle ();
   s->read_selected = true;
   s->read_ready = input_ready || get_cons_readahead_valid ();
-  s->cleanup = console_cleanup;
   return s;
 }
 
@@ -1361,7 +1175,8 @@ verify_tty_slave (select_record *me, fd_set *readfds, fd_set *writefds,
 	   fd_set *exceptfds)
 {
   fhandler_pty_slave *ptys = (fhandler_pty_slave *) me->fh;
-  if (me->read_selected && IsEventSignalled (ptys->input_available_event))
+  if (me->read_selected && !ptys->to_be_read_from_pcon () &&
+      IsEventSignalled (ptys->input_available_event))
     me->read_ready = true;
   return set_bits (me, readfds, writefds, exceptfds);
 }
@@ -1372,6 +1187,8 @@ peek_pty_slave (select_record *s, bool from_select)
   int gotone = 0;
   fhandler_base *fh = (fhandler_base *) s->fh;
   fhandler_pty_slave *ptys = (fhandler_pty_slave *) fh;
+
+  ptys->reset_switch_to_pcon ();
 
   if (s->read_selected)
     {
@@ -1386,6 +1203,29 @@ peek_pty_slave (select_record *s, bool from_select)
 	{
 	  gotone = s->read_ready = true;
 	  goto out;
+	}
+
+      if (ptys->to_be_read_from_pcon ())
+	{
+	  if (ptys->is_line_input ())
+	    {
+	      INPUT_RECORD inp[INREC_SIZE];
+	      DWORD n;
+	      PeekConsoleInput (ptys->get_handle (), inp, INREC_SIZE, &n);
+	      bool end_of_line = false;
+	      while (n-- > 0)
+		if (inp[n].EventType == KEY_EVENT &&
+		    inp[n].Event.KeyEvent.bKeyDown &&
+		    inp[n].Event.KeyEvent.uChar.AsciiChar == '\r')
+		  end_of_line = true;
+	      if (end_of_line)
+		{
+		  gotone = s->read_ready = true;
+		  goto out;
+		}
+	      else
+		goto out;
+	    }
 	}
 
       if (IsEventSignalled (ptys->input_available_event))
@@ -1405,21 +1245,18 @@ peek_pty_slave (select_record *s, bool from_select)
     }
 
 out:
-  HANDLE h = ptys->get_output_handle ();
+  HANDLE h = ptys->get_output_handle_cyg ();
   if (s->write_selected)
     {
-      ssize_t n = pipe_data_available (s->fd, fh, h, PDA_SELECT | PDA_WRITE);
-      select_printf ("write: %s, n %d", fh->get_name (), n);
-      gotone += s->write_ready = (n >= PIPE_BUF);
-      if (n < 0 && s->except_selected)
-	gotone += s->except_ready = true;
+      gotone += s->write_ready =  pipe_data_available (s->fd, fh, h, true);
+      select_printf ("write: %s, gotone %d", fh->get_name (), gotone);
     }
   return gotone;
 }
 
 static int pty_slave_startup (select_record *me, select_stuff *stuff);
 
-static DWORD
+static DWORD WINAPI
 thread_pty_slave (void *arg)
 {
   select_pipe_info *pi = (select_pipe_info *) arg;
@@ -1442,7 +1279,7 @@ thread_pty_slave (void *arg)
 	  }
       if (!looping)
 	break;
-      cygwait (pi->bye, sleep_time >> 3);
+      Sleep (sleep_time >> 3);
       if (sleep_time < 80)
 	++sleep_time;
       if (pi->stop_thread)
@@ -1457,7 +1294,7 @@ pty_slave_startup (select_record *me, select_stuff *stuff)
   fhandler_base *fh = (fhandler_base *) me->fh;
   fhandler_pty_slave *ptys = (fhandler_pty_slave *) fh;
   if (me->read_selected)
-    ptys->mask_switch_to_nat_pipe (true, true);
+    ptys->mask_switch_to_pcon_in (true);
 
   select_pipe_info *pi = stuff->device_specific_ptys;
   if (pi->start)
@@ -1466,7 +1303,6 @@ pty_slave_startup (select_record *me, select_stuff *stuff)
     {
       pi->start = &stuff->start;
       pi->stop_thread = false;
-      pi->bye = CreateEvent (&sec_none_nih, TRUE, FALSE, NULL);
       pi->thread = new cygthread (thread_pty_slave, pi, "ptyssel");
       me->h = *pi->thread;
       if (!me->h)
@@ -1480,17 +1316,16 @@ pty_slave_cleanup (select_record *me, select_stuff *stuff)
 {
   fhandler_base *fh = (fhandler_base *) me->fh;
   fhandler_pty_slave *ptys = (fhandler_pty_slave *) fh;
+  if (me->read_selected)
+    ptys->mask_switch_to_pcon_in (false);
+
   select_pipe_info *pi = (select_pipe_info *) stuff->device_specific_ptys;
   if (!pi)
     return;
-  if (me->read_selected && pi->start)
-    ptys->mask_switch_to_nat_pipe (false, false);
   if (pi->thread)
     {
       pi->stop_thread = true;
-      SetEvent (pi->bye);
       pi->thread->detach ();
-      CloseHandle (pi->bye);
     }
   delete pi;
   stuff->device_specific_ptys = NULL;
@@ -1589,110 +1424,170 @@ fhandler_dev_null::select_except (select_stuff *ss)
   return s;
 }
 
+static int start_thread_serial (select_record *me, select_stuff *stuff);
+
 static int
 peek_serial (select_record *s, bool)
 {
-  HANDLE h;
   COMSTAT st;
-  DWORD io_err;
 
   fhandler_serial *fh = (fhandler_serial *) s->fh;
 
-  set_handle_or_return_if_not_open (h, s);
+  if (fh->get_readahead_valid () || fh->overlapped_armed < 0)
+    return s->read_ready = true;
 
-  if ((s->read_selected && s->read_ready)
-      || (s->write_selected && s->write_ready))
+  select_printf ("fh->overlapped_armed %d", fh->overlapped_armed);
+
+  HANDLE h;
+  set_handle_or_return_if_not_open (h, s);
+  int ready = 0;
+
+  if ((s->read_selected && s->read_ready) || (s->write_selected && s->write_ready))
     {
       select_printf ("already ready");
-      return true;
+      ready = 1;
+      goto out;
     }
 
-  if (fh->get_readahead_valid ())
-    return s->read_ready = true;
+  /* This is apparently necessary for the com0com driver.
+     See: http://cygwin.com/ml/cygwin/2009-01/msg00667.html */
+  SetCommMask (h, 0);
 
-  if (!ClearCommError (h, &io_err, &st))
+  SetCommMask (h, EV_RXCHAR);
+
+  if (!fh->overlapped_armed)
     {
-      select_printf ("ClearCommError %E");
+      COMSTAT st;
+
+      ResetEvent (fh->io_status.hEvent);
+
+      if (!ClearCommError (h, &fh->ev, &st))
+	{
+	  debug_printf ("ClearCommError");
+	  goto err;
+	}
+      else if (st.cbInQue)
+	return s->read_ready = true;
+      else if (WaitCommEvent (h, &fh->ev, &fh->io_status))
+	return s->read_ready = true;
+      else if (GetLastError () == ERROR_IO_PENDING)
+	fh->overlapped_armed = 1;
+      else
+	{
+	  debug_printf ("WaitCommEvent");
+	  goto err;
+	}
+    }
+
+  switch (WaitForSingleObject (fh->io_status.hEvent, 10L))
+    {
+    case WAIT_OBJECT_0:
+      if (!ClearCommError (h, &fh->ev, &st))
+	{
+	  debug_printf ("ClearCommError");
+	  goto err;
+	}
+      else if (!st.cbInQue)
+	Sleep (10L);
+      else
+	{
+	  return s->read_ready = true;
+	  select_printf ("got something");
+	}
+      break;
+    case WAIT_TIMEOUT:
+      break;
+    default:
+      debug_printf ("WaitForMultipleObjects");
       goto err;
     }
-  if (st.cbInQue)
-    return s->read_ready = true;
 
-  return 0;
+out:
+  return ready;
 
 err:
   if (GetLastError () == ERROR_OPERATION_ABORTED)
     {
       select_printf ("operation aborted");
-      return false;
+      return ready;
     }
 
   s->set_select_errno ();
+  select_printf ("error %E");
   return -1;
 }
 
-static void
-serial_read_cleanup (select_record *s, select_stuff *stuff)
+static DWORD WINAPI
+thread_serial (void *arg)
 {
-  if (s->h)
-    {
-      HANDLE h = ((fhandler_serial *) s->fh)->get_handle ();
-      DWORD undefined;
+  select_serial_info *si = (select_serial_info *) arg;
+  bool looping = true;
 
-      if (h)
+  while (looping)
+    for (select_record *s = si->start; (s = s->next); )
+      if (s->startup != start_thread_serial)
+	continue;
+      else
 	{
-	  CancelIo (h);
-	  GetOverlappedResult (h, &s->fh_data_serial->ov, &undefined, TRUE);
+	  if (peek_serial (s, true))
+	    looping = false;
+	  if (si->stop_thread)
+	    {
+	      select_printf ("stopping");
+	      looping = false;
+	      break;
+	    }
 	}
-      CloseHandle (s->fh_data_serial->ov.hEvent);
-      delete s->fh_data_serial;
-    }
+
+  select_printf ("exiting");
+  return 0;
 }
 
 static int
-verify_serial (select_record *me, fd_set *rfds, fd_set *wfds, fd_set *efds)
+start_thread_serial (select_record *me, select_stuff *stuff)
 {
-  return peek_serial (me, true);
+  if (stuff->device_specific_serial)
+    me->h = *((select_serial_info *) stuff->device_specific_serial)->thread;
+  else
+    {
+      select_serial_info *si = new select_serial_info;
+      si->start = &stuff->start;
+      si->stop_thread = false;
+      si->thread = new cygthread (thread_serial, si, "sersel");
+      me->h = *si->thread;
+      stuff->device_specific_serial = si;
+    }
+  return 1;
+}
+
+static void
+serial_cleanup (select_record *, select_stuff *stuff)
+{
+  select_serial_info *si = (select_serial_info *) stuff->device_specific_serial;
+  if (!si)
+    return;
+  if (si->thread)
+    {
+      si->stop_thread = true;
+      si->thread->detach ();
+    }
+  delete si;
+  stuff->device_specific_serial = NULL;
 }
 
 select_record *
 fhandler_serial::select_read (select_stuff *ss)
 {
-  COMSTAT st;
-  DWORD io_err;
-
   select_record *s = ss->start.next;
-
-  s->startup = no_startup;
-  s->verify = verify_serial;
-  s->cleanup = serial_read_cleanup;
+  if (!s->startup)
+    {
+      s->startup = start_thread_serial;
+      s->verify = verify_ok;
+      s->cleanup = serial_cleanup;
+    }
   s->peek = peek_serial;
   s->read_selected = true;
   s->read_ready = false;
-
-  s->fh_data_serial = new (fh_select_data_serial);
-  s->fh_data_serial->ov.hEvent = CreateEvent (&sec_none_nih, TRUE, FALSE, NULL);
-
-  /* This is apparently necessary for the com0com driver.
-     See: http://cygwin.com/ml/cygwin/2009-01/msg00667.html */
-  SetCommMask (get_handle (), 0);
-  SetCommMask (get_handle (), EV_RXCHAR);
-  if (ClearCommError (get_handle (), &io_err, &st) && st.cbInQue)
-    s->read_ready = true;
-  else if (WaitCommEvent (get_handle (), &s->fh_data_serial->event,
-			  &s->fh_data_serial->ov))
-    s->read_ready = true;
-  else if (GetLastError () == ERROR_IO_PENDING)
-    s->h = s->fh_data_serial->ov.hEvent;
-  else
-    select_printf ("WaitCommEvent %E");
-
-  /* No overlapped operation?  Destroy the helper struct */
-  if (!s->h)
-    {
-      CloseHandle (s->fh_data_serial->ov.hEvent);
-      delete s->fh_data_serial;
-    }
   return s;
 }
 
@@ -1700,10 +1595,13 @@ select_record *
 fhandler_serial::select_write (select_stuff *ss)
 {
   select_record *s = ss->start.next;
-
-  s->startup = no_startup;
-  s->verify = verify_serial;
+  if (!s->startup)
+    {
+      s->startup = no_startup;
+      s->verify = verify_ok;
+    }
   s->peek = peek_serial;
+  s->h = get_handle ();
   s->write_selected = true;
   s->write_ready = true;
   return s;
@@ -1713,9 +1611,12 @@ select_record *
 fhandler_serial::select_except (select_stuff *ss)
 {
   select_record *s = ss->start.next;
-
-  s->startup = no_startup;
-  s->verify = verify_serial;
+  if (!s->startup)
+    {
+      s->startup = no_startup;
+      s->verify = verify_ok;
+    }
+  s->h = NULL;
   s->peek = peek_serial;
   s->except_selected = false;	// Can't do this
   s->except_ready = false;
@@ -1731,7 +1632,7 @@ fhandler_base::select_read (select_stuff *ss)
       s->startup = no_startup;
       s->verify = verify_ok;
     }
-  s->h = get_handle ();
+  s->h = get_handle_cyg ();
   s->read_selected = true;
   s->read_ready = true;
   return s;
@@ -1746,7 +1647,7 @@ fhandler_base::select_write (select_stuff *ss)
       s->startup = no_startup;
       s->verify = verify_ok;
     }
-  s->h = get_output_handle ();
+  s->h = get_output_handle_cyg ();
   s->write_selected = true;
   s->write_ready = true;
   return s;
@@ -1773,8 +1674,7 @@ peek_socket (select_record *me, bool)
   fhandler_socket_wsock *fh = (fhandler_socket_wsock *) me->fh;
   long events;
   /* Don't play with the settings again, unless having taken a deep look into
-     Richard W. Stevens Network Programming book and how these flags are
-     defined in Winsock.  Thank you. */
+     Richard W. Stevens Network Programming book.  Thank you. */
   long evt_mask = (me->read_selected ? (FD_READ | FD_ACCEPT | FD_CLOSE) : 0)
 		| (me->write_selected ? (FD_WRITE | FD_CONNECT | FD_CLOSE) : 0)
 		| (me->except_selected ? FD_OOB : 0);
@@ -1782,9 +1682,7 @@ peek_socket (select_record *me, bool)
   if (me->read_selected)
     me->read_ready |= ret || !!(events & (FD_READ | FD_ACCEPT | FD_CLOSE));
   if (me->write_selected)
-    /* Don't check for FD_CLOSE here.  Only an error case (ret == -1)
-       will set ready for writing. */
-    me->write_ready |= ret || !!(events & (FD_WRITE | FD_CONNECT));
+    me->write_ready |= ret || !!(events & (FD_WRITE | FD_CONNECT | FD_CLOSE));
   if (me->except_selected)
     me->except_ready |= !!(events & FD_OOB);
 
@@ -1795,7 +1693,7 @@ peek_socket (select_record *me, bool)
 
 static int start_thread_socket (select_record *, select_stuff *);
 
-static DWORD
+static DWORD WINAPI
 thread_socket (void *arg)
 {
   select_socket_info *si = (select_socket_info *) arg;
@@ -1825,7 +1723,7 @@ thread_socket (void *arg)
 	    case WAIT_OBJECT_0:
 	      if (!i)	/* Socket event set. */
 		goto out;
-	      fallthrough;
+	      /*FALLTHRU*/
 	    default:
 	      break;
 	    }
@@ -1987,7 +1885,10 @@ fhandler_socket_wsock::select_write (select_stuff *ss)
   s->write_ready = saw_shutdown_write () || connect_state () == unconnected;
   s->write_selected = true;
   if (connect_state () != unconnected)
-    s->except_on_write = true;
+    {
+      s->except_ready = saw_shutdown_write () || saw_shutdown_read ();
+      s->except_on_write = true;
+    }
   return s;
 }
 
@@ -2002,6 +1903,8 @@ fhandler_socket_wsock::select_except (select_stuff *ss)
       s->cleanup = socket_cleanup;
     }
   s->peek = peek_socket;
+  /* FIXME: Is this right?  Should these be used as criteria for except? */
+  s->except_ready = saw_shutdown_write () || saw_shutdown_read ();
   s->except_selected = true;
   return s;
 }
@@ -2017,7 +1920,7 @@ fhandler_socket_unix::select_read (select_stuff *ss)
       s->startup = no_startup;
       s->verify = verify_ok;
     }
-  s->h = get_handle ();
+  s->h = get_handle_cyg ();
   s->read_selected = true;
   s->read_ready = true;
   return s;
@@ -2262,148 +2165,6 @@ fhandler_timerfd::select_except (select_stuff *stuff)
     }
   s->peek = NULL;
   s->except_selected = false;
-  s->except_ready = false;
-  return s;
-}
-
-static int
-peek_dsp (select_record *s, bool from_select)
-{
-  int gotone = 0;
-  fhandler_dev_dsp *fh = (fhandler_dev_dsp *)(fhandler_base *) s->fh;
-
-  if (s->read_selected)
-      if (s->read_ready || fh->read_ready ())
-	gotone += s->read_ready = true;
-  if (s->write_selected)
-      if (s->write_ready || fh->write_ready ())
-	gotone += s->write_ready = true;
-  if (s->except_selected)
-      if (s->except_ready || fh->is_closed ())
-	gotone += s->except_ready = true;
-  return gotone;
-}
-
-static int start_thread_dsp (select_record *me, select_stuff *stuff);
-
-static DWORD
-thread_dsp (void *arg)
-{
-  select_dsp_info *di = (select_dsp_info *) arg;
-  DWORD sleep_time = 0;
-  bool looping = true;
-
-  while (looping)
-    {
-      for (select_record *s = di->start; (s = s->next); )
-	if (s->startup == start_thread_dsp)
-	  {
-	    if (peek_dsp (s, true))
-	      looping = false;
-	    if (di->stop_thread)
-	      {
-		select_printf ("stopping");
-		looping = false;
-		break;
-	      }
-	  }
-      if (!looping)
-	break;
-      cygwait (di->bye, sleep_time >> 3);
-      if (sleep_time < 80)
-	++sleep_time;
-      if (di->stop_thread)
-	break;
-    }
-  return 0;
-}
-
-static int
-start_thread_dsp (select_record *me, select_stuff *stuff)
-{
-  select_dsp_info *di = stuff->device_specific_dsp;
-  if (di->start)
-    me->h = *((select_dsp_info *) stuff->device_specific_dsp)->thread;
-  else
-    {
-      di->bye = me->fh->get_select_sem ();
-      if (di->bye)
-	DuplicateHandle (GetCurrentProcess (), di->bye,
-			 GetCurrentProcess (), &di->bye,
-			 0, 0, DUPLICATE_SAME_ACCESS);
-      else
-	di->bye = CreateSemaphore (&sec_none_nih, 0, INT32_MAX, NULL);
-      di->start = &stuff->start;
-      di->stop_thread = false;
-      di->thread = new cygthread (thread_dsp, di, "dspsel");
-      me->h = *di->thread;
-      if (!me->h)
-	return 0;
-    }
-  return 1;
-}
-
-static void
-dsp_cleanup (select_record *, select_stuff *stuff)
-{
-  select_dsp_info *di = (select_dsp_info *) stuff->device_specific_dsp;
-  if (!di)
-    return;
-  if (di->thread)
-    {
-      di->stop_thread = true;
-      ReleaseSemaphore (di->bye, get_obj_handle_count (di->bye), NULL);
-      di->thread->detach ();
-      CloseHandle (di->bye);
-    }
-  delete di;
-  stuff->device_specific_dsp = NULL;
-}
-
-select_record *
-fhandler_dev_dsp::select_read (select_stuff *stuff)
-{
-  if (!stuff->device_specific_dsp
-      && (stuff->device_specific_dsp = new select_dsp_info) == NULL)
-    return NULL;
-  select_record *s = stuff->start.next;
-  s->startup = start_thread_dsp;
-  s->peek = peek_dsp;
-  s->verify = verify_ok;
-  s->cleanup = dsp_cleanup;
-  s->read_selected = true;
-  s->read_ready = false;
-  return s;
-}
-
-select_record *
-fhandler_dev_dsp::select_write (select_stuff *stuff)
-{
-  if (!stuff->device_specific_dsp
-      && (stuff->device_specific_dsp = new select_dsp_info) == NULL)
-    return NULL;
-  select_record *s = stuff->start.next;
-  s->startup = start_thread_dsp;
-  s->peek = peek_dsp;
-  s->verify = verify_ok;
-  s->cleanup = dsp_cleanup;
-  s->write_selected = true;
-  s->write_ready = false;
-  return s;
-}
-
-select_record *
-fhandler_dev_dsp::select_except (select_stuff *stuff)
-{
-  if (!stuff->device_specific_dsp
-      && (stuff->device_specific_dsp = new select_dsp_info) == NULL)
-    return NULL;
-  select_record *s = stuff->start.next;
-  s->startup = start_thread_dsp;
-  s->peek = peek_dsp;
-  s->verify = verify_ok;
-  s->cleanup = dsp_cleanup;
-  s->except_selected = true;
   s->except_ready = false;
   return s;
 }

@@ -2,7 +2,7 @@
 // mdnspublisher.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2024-2025  R. Stange <rsta2@gmx.net>
+// Copyright (C) 2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -43,8 +43,7 @@ CmDNSPublisher::CmDNSPublisher (CNetSubSystem *pNet)
 	m_pSocket (nullptr),
 	m_bRunning (FALSE),
 	m_pWritePtr (nullptr),
-	m_pDataLen (nullptr),
-	m_pmDNSDaemon (CmDNSDaemon::Get ())	// start the daemon, if not done
+	m_pDataLen (nullptr)
 {
 	SetName ("mdnspub");
 }
@@ -247,8 +246,7 @@ boolean CmDNSPublisher::SendResponse (TService *pService, boolean bDelete)
 	ServiceName.Append (".");
 	ServiceName.Append (ServiceType);
 
-	assert (m_pmDNSDaemon);
-	CString Hostname (m_pmDNSDaemon->GetHostname ());
+	CString Hostname (m_pNet->GetHostname ());
 	Hostname.Append (Domain);
 
 	// Start writing buffer

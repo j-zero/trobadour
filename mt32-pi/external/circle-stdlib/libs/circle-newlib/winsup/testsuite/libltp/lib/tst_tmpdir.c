@@ -69,9 +69,6 @@
 #include "test.h"
 #include "rmobj.h"
 
-#pragma GCC diagnostic ignored "-Wformat-overflow"
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-
 /*
  * Define some useful macros.
  */
@@ -262,8 +259,7 @@ tst_rmdir()
       if ( getcwd(current_dir,PATH_MAX) == NULL )
          strcpy(parent_dir, TESTDIR);
       else
-         snprintf(parent_dir, sizeof parent_dir,
-		  "%s/%s", current_dir, TESTDIR);
+         sprintf(parent_dir, "%s/%s", current_dir, TESTDIR);
    } else {
       strcpy(parent_dir, TESTDIR);
    }

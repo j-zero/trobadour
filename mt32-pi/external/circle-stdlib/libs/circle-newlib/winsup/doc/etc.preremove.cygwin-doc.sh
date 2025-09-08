@@ -26,12 +26,7 @@ do
 done
 
 # Cygwin Start Menu directory
-if [ ! -v CYGWIN_START_MENU_SUFFIX ]
-then
-  case $(uname -s) in *-WOW*) CYGWIN_START_MENU_SUFFIX=" (32-bit)" ;; esac
-fi
-
-smpc_dir="$($cygp $CYGWINFORALL -P -U --)/Cygwin${CYGWIN_START_MENU_SUFFIX}"
+smpc_dir="$($cygp $CYGWINFORALL -P -U --)/Cygwin"
 
 # check Cygwin Start Menu directory still exists
 [ -d "$smpc_dir/" ] || exit 0
@@ -57,5 +52,3 @@ $site/index.html	Home\ Page	Cygwin\ Home\ Page\ Link
 $site/faq.html		FAQ	Cygwin\ Frequently\ Asked\ Questions\ Link
 EOF
 
-# remove Cygwin Start Menu directory if empty
-/usr/bin/rmdir --ignore-fail-on-non-empty "${smpc_dir}"

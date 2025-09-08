@@ -3,8 +3,7 @@
 #include "syscall.h"
 #include "eit.h"
 
-int
-_kill (int n, int m)
+_kill (n, m)
 {
   return TRAP0 (SYS_exit, 0xdead, 0, 0);
 }

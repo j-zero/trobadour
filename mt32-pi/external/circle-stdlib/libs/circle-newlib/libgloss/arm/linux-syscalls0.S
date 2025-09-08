@@ -6,8 +6,6 @@
  * is freely granted, provided that this notice is preserved.
  */
 
-	.syntax unified
-
 #include "linux-syscall.h"
 
 #if __thumb__
@@ -148,21 +146,12 @@ ALIAS(utime)
 ALIAS(vfork)
 ALIAS(wait4)
 
-#if defined (__thumb__) && !defined (__thumb2__)
-# define SOCKETCALL(name, NAME) \
-	GLOBAL(name); \
-	push { r0 - r3 }; \
-	movs r0, #SYS_ ## NAME; \
-	b _socketcall_tail; \
-	SIZE(name)
-#else
 # define SOCKETCALL(name, NAME) \
 	GLOBAL(name); \
 	push { r0 - r3 }; \
 	mov r0, #SYS_ ## NAME; \
 	b _socketcall_tail; \
 	SIZE(name)
-#endif
 
 FUNC(_socketcall_tail)
 	mov r1, sp

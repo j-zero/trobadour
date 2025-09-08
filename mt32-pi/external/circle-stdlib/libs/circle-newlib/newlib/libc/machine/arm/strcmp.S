@@ -28,7 +28,7 @@
 
 /* Wrapper for the various implementations of strcmp.  */
 
-#include "arm-acle-compat.h"
+#include "acle-compat.h"
 
 #ifdef __ARM_BIG_ENDIAN
 #define S2LO lsl

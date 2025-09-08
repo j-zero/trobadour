@@ -45,8 +45,6 @@ INSTALL_DATA = @INSTALL_DATA@
 
 SHELL =	/bin/sh
 
-mkinstalldirs = $(SHELL) $(srcroot)/mkinstalldirs
-
 CC = @CC@
 
 AS = @AS@
@@ -69,7 +67,7 @@ OBJS =  close.o fstat.o getpid.o isatty.o kill.o \
 	unlink.o write.o
 
 # What targets to build for.  This is a list of {m68k,cf}
-TARGET = @M68K_TARGET@
+DO = @DO@
 
 # Here is all of the simulator stuff
 SIM_SCRIPTS	= sim.ld
@@ -200,7 +198,7 @@ HOSTED_OBJS=	hosted-gdb.o hosted-exit.o $(patsubst un%,%,$(UNHOSTED_OBJS))
 # Host specific makefile fragment comes in here.
 @host_makefile_frag@
 
-all :: $(TARGET:%=all_%)
+all :: $(DO:%=all_%)
 
 #
 # here's where we build the board support packages for each target
@@ -406,12 +404,11 @@ dtor.x: dtor.o ${CRT0} ${srcdir}/mvme135.ld Makefile  ${MVME135_BSP}
 unlink.o: $(srcdir)/../unlink.c
 
 .PHONY: install info dvi doc install-info clean-info
-install:: $(TARGET:%=install_%)
+install:: $(DO:%=install_%)
 
 
 .PHONY:install_m68k
 install_m68k::
-	${mkinstalldirs} ${DESTDIR}${tooldir}/lib${MULTISUBDIR}
 	# install SIM stuff
 	$(INSTALL_PROGRAM) $(SIM_CRT0) $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}/$(SIM_CRT0)
 	$(INSTALL_PROGRAM) $(SIM_BSP) $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}/$(SIM_BSP)
@@ -438,7 +435,6 @@ install_m68k::
 
 .PHONY: install_cf
 install_cf:: install_io
-	${mkinstalldirs} ${DESTDIR}${tooldir}/lib${MULTISUBDIR}
 	# install CF stuff
 	$(INSTALL_DATA) $(CF_CRT0S) $(CF_BSP) \
 		$(DESTDIR)$(tooldir)/lib${MULTISUBDIR}
@@ -451,7 +447,6 @@ endif
 
 .PHONY: install_fido
 install_fido:: install_io
-	${mkinstalldirs} ${DESTDIR}${tooldir}/lib${MULTISUBDIR}
 	$(INSTALL_DATA) $(FIDO_CRT0S) $(FIDO_BSP) \
 		$(DESTDIR)$(tooldir)/lib$(MULTISUBDIR)
 	$(INSTALL_DATA) $(FIDO_SCRIPTS) $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}
@@ -464,7 +459,6 @@ endif
 
 .PHONY: install_io
 install_io::
-	${mkinstalldirs} ${DESTDIR}${tooldir}/lib${MULTISUBDIR}
 	# install IO stuff
 	$(INSTALL_DATA) $(HOSTED_BSP) $(UNHOSTED_BSP) \
 		$(DESTDIR)$(tooldir)/lib${MULTISUBDIR}
@@ -476,11 +470,14 @@ clean mostlyclean:
 	rm -f a.out core *.i *~ *.a *.o *-test *.srec *.dis *.x *.map
 
 distclean maintainer-clean realclean: clean
-	rm -f Makefile
+	rm -f Makefile config.cache config.log config.status
 
 info dvi doc:
 install-info:
 clean-info:
 
-Makefile: Makefile.in ../config.status
-	cd .. && $(SHELL) config.status
+Makefile: Makefile.in config.status @host_makefile_frag_path@ @target_makefile_frag_path@
+	$(SHELL) config.status
+
+config.status: configure
+	$(SHELL) config.status --recheck

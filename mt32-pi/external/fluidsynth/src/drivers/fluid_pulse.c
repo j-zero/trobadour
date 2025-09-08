@@ -13,8 +13,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA
  */
 
 /* fluid_pulse.c
@@ -115,7 +116,7 @@ new_fluid_pulse_audio_driver2(fluid_settings_t *settings,
     {
         if(FLUID_STRCMP(media_role, "") != 0)
         {
-            fluid_setenv("PULSE_PROP_media.role", media_role, TRUE);
+            g_setenv("PULSE_PROP_media.role", media_role, TRUE);
         }
 
         FLUID_FREE(media_role);       /* -- free media_role string */

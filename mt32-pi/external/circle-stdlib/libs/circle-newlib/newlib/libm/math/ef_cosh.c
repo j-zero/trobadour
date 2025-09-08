@@ -14,16 +14,15 @@
  */
 
 #include "fdlibm.h"
-#include "math_config.h"
 
 #ifdef __v810__
 #define const
 #endif
 
 #ifdef __STDC__
-static const float one = 1.0, half=0.5;
+static const float one = 1.0, half=0.5, huge = 1.0e30;
 #else
-static float one = 1.0, half=0.5;
+static float one = 1.0, half=0.5, huge = 1.0e30;
 #endif
 
 #ifdef __STDC__
@@ -68,5 +67,5 @@ static float one = 1.0, half=0.5;
 	}
 
     /* |x| > overflowthresold, cosh(x) overflow */
-	return __math_oflowf(0);
+	return huge*huge;
 }

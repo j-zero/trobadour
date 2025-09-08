@@ -2,7 +2,7 @@
 // netsubsystem.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2015-2025  R. Stange <rsta2@gmx.net>
+// Copyright (C) 2015-2024  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -94,6 +94,13 @@ boolean CNetSubSystem::Initialize (boolean bWaitForActivate)
 	if (!bWaitForActivate)
 	{
 		return TRUE;
+	}
+
+	if (m_bUseDHCP)
+	{
+		assert (m_pDHCPClient == 0);
+		m_pDHCPClient = new CDHCPClient (this, m_Hostname);
+		assert (m_pDHCPClient != 0);
 	}
 
 	while (!IsRunning ())

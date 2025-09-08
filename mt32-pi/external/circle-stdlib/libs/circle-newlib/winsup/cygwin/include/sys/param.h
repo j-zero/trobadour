@@ -17,14 +17,13 @@
 /* Max number of open files.  The Posix version is OPEN_MAX.  */
 /* Number of fds is virtually unlimited in cygwin, but we must provide
    some reasonable value for Posix conformance */
-#if !defined NOFILE && defined OPEN_MAX
-# define NOFILE         OPEN_MAX
-#endif
+#define NOFILE		8192
 
 /* Max number of groups; must keep in sync with NGROUPS_MAX in limits.h */
 #define NGROUPS		NGROUPS_MAX
 
 /* Ticks/second for system calls such as times() */
+/* FIXME: is this the appropriate value? */
 #define HZ		1000
 
 /* Max hostname size that can be dealt with (== Win32 MAX_HOSTNAME_LEN) */

@@ -56,6 +56,8 @@ vscanf (const char *fmt,
 {
   c99_vscanf_t args;
 
+  CHECK_STD_INIT(_REENT);
+
   args.fmt = (char*) fmt;
   va_copy(args.ap,ap);
 

@@ -10,8 +10,7 @@ atanl (long double x)
 {
   long double res = 0.0L;
 
-  asm volatile (
-       "fld1\n\t"
+  asm ("fld1\n\t"
        "fpatan"
        : "=t" (res) : "0" (x));
   return res;

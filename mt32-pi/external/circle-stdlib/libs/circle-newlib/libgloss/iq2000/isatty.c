@@ -4,8 +4,8 @@
 #include "trap.h"
 
 
-int
-_isatty (int fd)
+_isatty (fd)
+     int fd;
 {
   return 1;
 }

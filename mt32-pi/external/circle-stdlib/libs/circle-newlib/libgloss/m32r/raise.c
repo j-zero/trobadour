@@ -1,6 +1,5 @@
 /* ??? Needed?  */
 
-int
-_raise (void)
+_raise ()
 {
 }

@@ -88,7 +88,7 @@ ftw(const char *path, int (*fn)(const char *, const struct stat *, int),
 			break;
 		case FTS_DC:
 			errno = ELOOP;
-			fallthrough;
+			/* FALLTHROUGH */
 		default:
 			error = -1;
 			goto done;

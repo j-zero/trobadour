@@ -47,11 +47,11 @@ int dumper(void* user, const char* section, const char* name,
 #endif
 
     if (!value) {
-        /* Happens when INI_ALLOW_NO_VALUE=1 and line has no value (no '=' or ':') */
+        // Happens when INI_ALLOW_NO_VALUE=1 and line has no value (no '=' or ':')
         return 1;
     }
 
-    return strcmp(name, "user") == 0 && strcmp(value, "parse_error") == 0 ? 0 : 1;
+    return strcmp(name, "user")==0 && strcmp(value, "parse_error")==0 ? 0 : 1;
 }
 
 void parse(const char* fname) {
@@ -81,6 +81,5 @@ int main(void)
     parse("no_value.ini");
     parse("long_section.ini");
     parse("long_line.ini");
-    parse("name_only_after_error.ini");
     return 0;
 }

@@ -13,7 +13,11 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *	This product includes software developed by the University of
+ *	California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -276,9 +280,8 @@ error0:
 }
 
 static int
-hash_close(
-	DB *dbp
-)
+hash_close(dbp)
+	DB *dbp;
 {
 	HTAB *hashp;
 	int retval;
@@ -293,9 +296,8 @@ hash_close(
 }
 
 static int
-hash_fd(
-	const DB *dbp
-)
+hash_fd(dbp)
+	const DB *dbp;
 {
 	HTAB *hashp;
 
@@ -312,11 +314,10 @@ hash_fd(
 
 /************************** LOCAL CREATION ROUTINES **********************/
 static HTAB *
-init_hash(
-	HTAB *hashp,
-	const char *file,
-	const HASHINFO *info
-)
+init_hash(hashp, file, info)
+	HTAB *hashp;
+	const char *file;
+	const HASHINFO *info;
 {
 #ifdef __USE_INTERNAL_STAT64
         struct stat64 statbuf;
@@ -388,10 +389,9 @@ init_hash(
  * Returns 0 on No Error
  */
 static int
-init_htab(
-	HTAB *hashp,
-	int nelem
-)
+init_htab(hashp, nelem)
+	HTAB *hashp;
+	int nelem;
 {
 	int nbuckets, nsegs;
 	int l2;
@@ -435,9 +435,8 @@ init_htab(
  * structure, freeing all allocated space.
  */
 static int
-hdestroy(
-	HTAB *hashp
-)
+hdestroy(hashp)
+	HTAB *hashp;
 {
 	int i, save_errno;
 
@@ -496,10 +495,9 @@ hdestroy(
  *	-1 ERROR
  */
 static int
-hash_sync(
-	const DB *dbp,
-	u_int flags
-)
+hash_sync(dbp, flags)
+	const DB *dbp;
+	u_int flags;
 {
 	HTAB *hashp;
 
@@ -526,9 +524,8 @@ hash_sync(
  *	-1 indicates that errno should be set
  */
 static int
-flush_meta(
-	HTAB *hashp
-)
+flush_meta(hashp)
+	HTAB *hashp;
 {
 	HASHHDR *whdrp;
 #if (BYTE_ORDER == LITTLE_ENDIAN)
@@ -575,12 +572,11 @@ flush_meta(
  *	-1 to indicate an internal ERROR (i.e. out of memory, etc)
  */
 static int
-hash_get(
-	const DB *dbp,
-	const DBT *key,
-	DBT *data,
-	u_int flag
-)
+hash_get(dbp, key, data, flag)
+	const DB *dbp;
+	const DBT *key;
+	DBT *data;
+	u_int flag;
 {
 	HTAB *hashp;
 
@@ -593,12 +589,11 @@ hash_get(
 }
 
 static int
-hash_put(
-	const DB *dbp,
-	DBT *key,
-	const DBT *data,
-	u_int flag
-)
+hash_put(dbp, key, data, flag)
+	const DB *dbp;
+	DBT *key;
+	const DBT *data;
+	u_int flag;
 {
 	HTAB *hashp;
 
@@ -617,11 +612,10 @@ hash_put(
 }
 
 static int
-hash_delete(
-	const DB *dbp,
-	const DBT *key,
-	u_int flag		/* Ignored */
-)
+hash_delete(dbp, key, flag)
+	const DB *dbp;
+	const DBT *key;
+	u_int flag;		/* Ignored */
 {
 	HTAB *hashp;
 
@@ -641,12 +635,10 @@ hash_delete(
  * Assume that hashp has been set in wrapper routine.
  */
 static int
-hash_access(
-	HTAB *hashp,
-	ACTION action,
-	DBT *key,
-	DBT *val
-)
+hash_access(hashp, action, key, val)
+	HTAB *hashp;
+	ACTION action;
+	DBT *key, *val;
 {
 	BUFHEAD *rbufp;
 	BUFHEAD *bufp, *save_bufp;
@@ -772,12 +764,10 @@ found:
 }
 
 static int
-hash_seq(
-	const DB *dbp,
-	DBT *key,
-	DBT *data,
-	u_int flag
-)
+hash_seq(dbp, key, data, flag)
+	const DB *dbp;
+	DBT *key, *data;
+	u_int flag;
 {
 	__uint32_t bucket;
 	BUFHEAD *bufp;
@@ -864,9 +854,8 @@ hash_seq(
  *	-1 ==> Error
  */
 extern int
-__expand_table(
-	HTAB *hashp
-)
+__expand_table(hashp)
+	HTAB *hashp;
 {
 	__uint32_t old_bucket, new_bucket;
 	int dirsize, new_segnum, spare_ndx;
@@ -920,11 +909,9 @@ __expand_table(
  * fails, then this routine can go away.
  */
 static void *
-hash_realloc(
-	SEGMENT **p_ptr,
-	int oldsize,
-	int newsize
-)
+hash_realloc(p_ptr, oldsize, newsize)
+	SEGMENT **p_ptr;
+	int oldsize, newsize;
 {
 	void *p;
 
@@ -938,11 +925,10 @@ hash_realloc(
 }
 
 extern __uint32_t
-__call_hash(
-	HTAB *hashp,
-	char *k,
-	int len
-)
+__call_hash(hashp, k, len)
+	HTAB *hashp;
+	char *k;
+	int len;
 {
 	int n, bucket;
 
@@ -959,10 +945,9 @@ __call_hash(
  * Returns 0 on success
  */
 static int
-alloc_segs(
-	HTAB *hashp,
-	int nsegs
-)
+alloc_segs(hashp, nsegs)
+	HTAB *hashp;
+	int nsegs;
 {
 	int i;
 	SEGMENT store;
@@ -994,10 +979,8 @@ alloc_segs(
  * Hashp->hdr needs to be byteswapped.
  */
 static void
-swap_header_copy(
-	HASHHDR *srcp,
-	HASHHDR *destp
-)
+swap_header_copy(srcp, destp)
+	HASHHDR *srcp, *destp;
 {
 	int i;
 
@@ -1025,9 +1008,8 @@ swap_header_copy(
 }
 
 static void
-swap_header(
-	HTAB *hashp
-)
+swap_header(hashp)
+	HTAB *hashp;
 {
 	HASHHDR *hdrp;
 	int i;

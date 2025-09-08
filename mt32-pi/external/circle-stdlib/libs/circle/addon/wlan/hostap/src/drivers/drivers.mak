@@ -1,62 +1,47 @@
-##### CLEAR VARS
-
-DRV_CFLAGS =
-DRV_WPA_CFLAGS =
-DRV_AP_CFLAGS =
-DRV_OBJS =
-DRV_WPA_OBJS =
-DRV_AP_OBJS =
-DRV_LIBS =
-DRV_WPA_LIBS =
-DRV_AP_LIBS =
-
 ##### COMMON DRIVERS
+
+ifdef CONFIG_DRIVER_HOSTAP
+DRV_CFLAGS += -DCONFIG_DRIVER_HOSTAP
+DRV_OBJS += ../src/drivers/driver_hostap.o
+CONFIG_WIRELESS_EXTENSION=y
+NEED_AP_MLME=y
+endif
 
 ifdef CONFIG_DRIVER_WIRED
 DRV_CFLAGS += -DCONFIG_DRIVER_WIRED
 DRV_OBJS += ../src/drivers/driver_wired.o
-NEED_DRV_WIRED_COMMON=1
 endif
 
-ifdef CONFIG_DRIVER_MACSEC_LINUX
-DRV_CFLAGS += -DCONFIG_DRIVER_MACSEC_LINUX
-DRV_OBJS += ../src/drivers/driver_macsec_linux.o
-NEED_DRV_WIRED_COMMON=1
-NEED_LIBNL=y
-CONFIG_LIBNL3_ROUTE=y
+ifdef CONFIG_DRIVER_MADWIFI
+DRV_CFLAGS += -DCONFIG_DRIVER_MADWIFI
+DRV_OBJS += ../src/drivers/driver_madwifi.o
+CONFIG_WIRELESS_EXTENSION=y
+CONFIG_L2_PACKET=linux
 endif
 
-ifdef CONFIG_DRIVER_NL80211_BRCM
-DRV_CFLAGS += -DCONFIG_DRIVER_NL80211_BRCM
-endif
-
-ifdef CONFIG_DRIVER_MACSEC_QCA
-DRV_CFLAGS += -DCONFIG_DRIVER_MACSEC_QCA
-DRV_OBJS += ../src/drivers/driver_macsec_qca.o
-NEED_DRV_WIRED_COMMON=1
-endif
-
-ifdef NEED_DRV_WIRED_COMMON
-DRV_OBJS += ../src/drivers/driver_wired_common.o
+ifdef CONFIG_DRIVER_PRISM54
+DRV_CFLAGS += -DCONFIG_DRIVER_PRISM54
+DRV_OBJS += ../src/drivers/driver_prism54.o
+CONFIG_WIRELESS_EXTENSION=y
 endif
 
 ifdef CONFIG_DRIVER_NL80211
 DRV_CFLAGS += -DCONFIG_DRIVER_NL80211
 DRV_OBJS += ../src/drivers/driver_nl80211.o
-DRV_OBJS += ../src/drivers/driver_nl80211_capa.o
-DRV_OBJS += ../src/drivers/driver_nl80211_event.o
-DRV_OBJS += ../src/drivers/driver_nl80211_monitor.o
-DRV_OBJS += ../src/drivers/driver_nl80211_scan.o
-ifdef CONFIG_DRIVER_NL80211_QCA
-DRV_CFLAGS += -DCONFIG_DRIVER_NL80211_QCA
+
+ifdef CONFIG_CLIENT_MLME
+DRV_OBJS += ../src/utils/radiotap.o
+else
+DRV_AP_OBJS += ../src/utils/radiotap.o
 endif
 NEED_SME=y
 NEED_AP_MLME=y
-NEED_NETLINK=y
-NEED_LINUX_IOCTL=y
-NEED_RFKILL=y
-NEED_RADIOTAP=y
-NEED_LIBNL=y
+DRV_LIBS += -lnl
+
+ifdef CONFIG_LIBNL20
+DRV_LIBS += -lnl-genl
+DRV_CFLAGS += -DCONFIG_LIBNL20
+endif
 endif
 
 ifdef CONFIG_DRIVER_BSD
@@ -69,12 +54,10 @@ CONFIG_L2_FREEBSD=y
 CONFIG_DNET_PCAP=y
 endif
 
-ifdef CONFIG_DRIVER_OPENBSD
-ifndef CONFIG_L2_PACKET
-CONFIG_L2_PACKET=freebsd
-endif
-DRV_CFLAGS += -DCONFIG_DRIVER_OPENBSD
-DRV_OBJS += ../src/drivers/driver_openbsd.o
+ifdef CONFIG_DRIVER_TEST
+DRV_CFLAGS += -DCONFIG_DRIVER_TEST
+DRV_OBJS += ../src/drivers/driver_test.o
+NEED_AP_MLME=y
 endif
 
 ifdef CONFIG_DRIVER_NONE
@@ -84,24 +67,10 @@ endif
 
 ##### PURE AP DRIVERS
 
-ifdef CONFIG_DRIVER_HOSTAP
-DRV_AP_CFLAGS += -DCONFIG_DRIVER_HOSTAP
-DRV_AP_OBJS += ../src/drivers/driver_hostap.o
-CONFIG_WIRELESS_EXTENSION=y
-NEED_AP_MLME=y
-NEED_NETLINK=y
-NEED_LINUX_IOCTL=y
-endif
-
 ifdef CONFIG_DRIVER_ATHEROS
 DRV_AP_CFLAGS += -DCONFIG_DRIVER_ATHEROS
 DRV_AP_OBJS += ../src/drivers/driver_atheros.o
 CONFIG_L2_PACKET=linux
-NEED_NETLINK=y
-NEED_LINUX_IOCTL=y
-ifdef ATH_GCM_SUPPORT
-CFLAGS += -DATH_GCM_SUPPORT
-endif
 endif
 
 ##### PURE CLIENT DRIVERS
@@ -109,9 +78,40 @@ endif
 ifdef CONFIG_DRIVER_WEXT
 DRV_WPA_CFLAGS += -DCONFIG_DRIVER_WEXT
 CONFIG_WIRELESS_EXTENSION=y
-NEED_NETLINK=y
-NEED_LINUX_IOCTL=y
-NEED_RFKILL=y
+endif
+
+ifdef CONFIG_DRIVER_HERMES
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_HERMES
+DRV_WPA_OBJS += ../src/drivers/driver_hermes.o
+CONFIG_WIRELESS_EXTENSION=y
+endif
+
+ifdef CONFIG_DRIVER_ATMEL
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_ATMEL
+DRV_WPA_OBJS += ../src/drivers/driver_atmel.o
+CONFIG_WIRELESS_EXTENSION=y
+endif
+
+ifdef CONFIG_DRIVER_NDISWRAPPER
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_NDISWRAPPER
+DRV_WPA_OBJS += ../src/drivers/driver_ndiswrapper.o
+CONFIG_WIRELESS_EXTENSION=y
+endif
+
+ifdef CONFIG_DRIVER_RALINK
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_RALINK
+DRV_WPA_OBJS += ../src/drivers/driver_ralink.o
+endif
+
+ifdef CONFIG_DRIVER_BROADCOM
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_BROADCOM
+DRV_WPA_OBJS += ../src/drivers/driver_broadcom.o
+endif
+
+ifdef CONFIG_DRIVER_IPW
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_IPW
+DRV_WPA_OBJS += ../src/drivers/driver_ipw.o
+CONFIG_WIRELESS_EXTENSION=y
 endif
 
 ifdef CONFIG_DRIVER_NDIS
@@ -129,6 +129,26 @@ DRV_WPA_CFLAGS += -DCONFIG_USE_NDISUIO
 endif
 endif
 
+ifdef CONFIG_DRIVER_OSX
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_OSX
+DRV_WPA_OBJS += ../src/drivers/driver_osx.o
+DRV_WPA_LDFLAGS += -framework CoreFoundation
+DRV_WPA_LDFLAGS += -F/System/Library/PrivateFrameworks -framework Apple80211
+endif
+
+ifdef CONFIG_DRIVER_PS3
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_PS3 -m64
+DRV_WPA_OBJS += ../src/drivers/driver_ps3.o
+DRV_WPA_LDFLAGS += -m64
+endif
+
+ifdef CONFIG_DRIVER_IPHONE
+DRV_WPA_CFLAGS += -DCONFIG_DRIVER_IPHONE
+DRV_WPA_OBJS += ../src/drivers/driver_iphone.o
+DRV_WPA_OBJS += ../src/drivers/MobileApple80211.o
+DRV_WPA_LDFLAGS += -framework CoreFoundation
+endif
+
 ifdef CONFIG_DRIVER_ROBOSWITCH
 DRV_WPA_CFLAGS += -DCONFIG_DRIVER_ROBOSWITCH
 DRV_WPA_OBJS += ../src/drivers/driver_roboswitch.o
@@ -137,69 +157,6 @@ endif
 ifdef CONFIG_WIRELESS_EXTENSION
 DRV_WPA_CFLAGS += -DCONFIG_WIRELESS_EXTENSION
 DRV_WPA_OBJS += ../src/drivers/driver_wext.o
-NEED_RFKILL=y
-endif
-
-ifdef NEED_NETLINK
-DRV_OBJS += ../src/drivers/netlink.o
-endif
-
-ifdef NEED_RFKILL
-DRV_OBJS += ../src/drivers/rfkill.o
-endif
-
-ifdef NEED_RADIOTAP
-DRV_OBJS += ../src/utils/radiotap.o
-endif
-
-ifdef CONFIG_FULL_DYNAMIC_VLAN
-NEED_LINUX_IOCTL=y
-ifdef CONFIG_VLAN_NETLINK
-NEED_LIBNL=y
-CONFIG_LIBNL3_ROUTE=y
-endif
-endif
-
-ifdef NEED_LINUX_IOCTL
-DRV_OBJS += ../src/drivers/linux_ioctl.o
-endif
-
-ifdef NEED_LIBNL
-ifndef CONFIG_LIBNL32
-ifndef CONFIG_LIBNL20
-ifndef CONFIG_LIBNL_TINY
-PKG_CONFIG ?= pkg-config
-HAVE_LIBNL3 := $(shell $(PKG_CONFIG) --exists libnl-3.0; echo $$?)
-ifeq ($(HAVE_LIBNL3),0)
-CONFIG_LIBNL32=y
-endif
-endif
-endif
-endif
-
-ifdef CONFIG_LIBNL32
-  DRV_LIBS += -lnl-3
-  DRV_LIBS += -lnl-genl-3
-  ifdef LIBNL_INC
-    DRV_CFLAGS += -I$(LIBNL_INC)
-  else
-    PKG_CONFIG ?= pkg-config
-    DRV_CFLAGS += $(shell $(PKG_CONFIG) --cflags libnl-3.0)
-  endif
-  ifdef CONFIG_LIBNL3_ROUTE
-    DRV_LIBS += -lnl-route-3
-    DRV_CFLAGS += -DCONFIG_LIBNL3_ROUTE
-  endif
-else
-  ifdef CONFIG_LIBNL_TINY
-    DRV_LIBS += -lnl-tiny
-  else
-    ifndef CONFIG_OSX
-      DRV_LIBS += -lnl
-      DRV_LIBS += -lnl-genl
-    endif
-  endif
-endif
 endif
 
 ##### COMMON VARS

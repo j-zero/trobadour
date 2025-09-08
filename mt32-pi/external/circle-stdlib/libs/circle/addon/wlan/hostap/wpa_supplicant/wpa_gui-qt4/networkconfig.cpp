@@ -2,8 +2,14 @@
  * wpa_gui - NetworkConfig class
  * Copyright (c) 2005-2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include <cstdio>
@@ -26,8 +32,7 @@ enum {
 #define WPA_GUI_KEY_DATA "[key is configured]"
 
 
-NetworkConfig::NetworkConfig(QWidget *parent, const char *, bool,
-			     Qt::WindowFlags)
+NetworkConfig::NetworkConfig(QWidget *parent, const char *, bool, Qt::WFlags)
 	: QDialog(parent)
 {
 	setupUi(this);
@@ -37,7 +42,7 @@ NetworkConfig::NetworkConfig(QWidget *parent, const char *, bool,
 		SLOT(authChanged(int)));
 	connect(cancelButton, SIGNAL(clicked()), this, SLOT(close()));
 	connect(addButton, SIGNAL(clicked()), this, SLOT(addNetwork()));
-	connect(encrSelect, SIGNAL(textActivated(const QString &)), this,
+	connect(encrSelect, SIGNAL(activated(const QString &)), this,
 		SLOT(encrChanged(const QString &)));
 	connect(removeButton, SIGNAL(clicked()), this, SLOT(removeNetwork()));
 	connect(eapSelect, SIGNAL(activated(int)), this,
@@ -192,28 +197,25 @@ void NetworkConfig::addNetwork()
 
 	if (auth == AUTH_WPA_PSK || auth == AUTH_WPA2_PSK) {
 		if (psklen < 8 || psklen > 64) {
-			QMessageBox::warning(
-				this,
-				tr("WPA Pre-Shared Key Error"),
-				tr("WPA-PSK requires a passphrase of 8 to 63 "
-				   "characters\n"
-				   "or 64 hex digit PSK"));
+			QMessageBox::warning(this, "WPA Pre-Shared Key Error",
+					     "WPA-PSK requires a passphrase "
+					     "of 8 to 63 characters\n"
+					     "or 64 hex digit PSK");
 			pskEdit->setFocus();
 			return;
 		}
 	}
 
 	if (idstrEdit->isEnabled() && !idstrEdit->text().isEmpty()) {
-		QRegularExpression rx("^(\\w|-)+$");
-		if (!rx.match(idstrEdit->text()).hasMatch()) {
-			QMessageBox::warning(
-				this, tr("Network ID Error"),
-				tr("Network ID String contains non-word "
-				   "characters.\n"
-				   "It must be a simple string, "
-				   "without spaces, containing\n"
-				   "only characters in this range: "
-				   "[A-Za-z0-9_-]\n"));
+		QRegExp rx("^(\\w|-)+$");
+		if (rx.indexIn(idstrEdit->text()) < 0) {
+			QMessageBox::warning(this, "Network ID Error",
+					     "Network ID String contains "
+					     "non-word characters.\n"
+					     "It must be a simple string, "
+					     "without spaces, containing\n"
+					     "only characters in this range: "
+					     "[A-Za-z0-9_-]\n");
 			idstrEdit->setFocus();
 			return;
 		}
@@ -228,17 +230,16 @@ void NetworkConfig::addNetwork()
 	if (new_network) {
 		wpagui->ctrlRequest("ADD_NETWORK", reply, &reply_len);
 		if (reply[0] == 'F') {
-			QMessageBox::warning(this, "wpa_gui",
-					     tr("Failed to add "
-						"network to wpa_supplicant\n"
-						"configuration."));
+			QMessageBox::warning(this, "wpa_gui", "Failed to add "
+					     "network to wpa_supplicant\n"
+					     "configuration.");
 			return;
 		}
 		id = atoi(reply);
 	} else
 		id = edit_network_id;
 
-	setNetworkParam(id, "ssid", ssidEdit->text().toLocal8Bit().constData(),
+	setNetworkParam(id, "ssid", ssidEdit->text().toAscii().constData(),
 			true);
 
 	const char *key_mgmt = NULL, *proto = NULL, *pairwise = NULL;
@@ -292,14 +293,14 @@ void NetworkConfig::addNetwork()
 		setNetworkParam(id, "group", "TKIP CCMP WEP104 WEP40", false);
 	}
 	if (pskEdit->isEnabled() &&
-	    strcmp(pskEdit->text().toLocal8Bit().constData(),
+	    strcmp(pskEdit->text().toAscii().constData(),
 		   WPA_GUI_KEY_DATA) != 0)
 		setNetworkParam(id, "psk",
-				pskEdit->text().toLocal8Bit().constData(),
+				pskEdit->text().toAscii().constData(),
 				psklen != 64);
 	if (eapSelect->isEnabled()) {
 		const char *eap =
-			eapSelect->currentText().toLocal8Bit().constData();
+			eapSelect->currentText().toAscii().constData();
 		setNetworkParam(id, "eap", eap, false);
 		if (strcmp(eap, "SIM") == 0 || strcmp(eap, "AKA") == 0)
 			setNetworkParam(id, "pcsc", "", true);
@@ -315,21 +316,21 @@ void NetworkConfig::addNetwork()
 			if (inner.startsWith("EAP-"))
 				snprintf(phase2, sizeof(phase2), "auth=%s",
 					 inner.right(inner.size() - 4).
-					 toLocal8Bit().constData());
+					 toAscii().constData());
 		} else if (eap.compare("TTLS") == 0) {
 			if (inner.startsWith("EAP-"))
 				snprintf(phase2, sizeof(phase2), "autheap=%s",
 					 inner.right(inner.size() - 4).
-					 toLocal8Bit().constData());
+					 toAscii().constData());
 			else
 				snprintf(phase2, sizeof(phase2), "auth=%s",
-					 inner.toLocal8Bit().constData());
+					 inner.toAscii().constData());
 		} else if (eap.compare("FAST") == 0) {
 			const char *provisioning = NULL;
 			if (inner.startsWith("EAP-")) {
 				snprintf(phase2, sizeof(phase2), "auth=%s",
 					 inner.right(inner.size() - 4).
-					 toLocal8Bit().constData());
+					 toAscii().constData());
 				provisioning = "fast_provisioning=2";
 			} else if (inner.compare("GTC(auth) + MSCHAPv2(prov)")
 				   == 0) {
@@ -355,21 +356,21 @@ void NetworkConfig::addNetwork()
 		setNetworkParam(id, "phase2", "NULL", false);
 	if (identityEdit->isEnabled() && identityEdit->text().length() > 0)
 		setNetworkParam(id, "identity",
-				identityEdit->text().toLocal8Bit().constData(),
+				identityEdit->text().toAscii().constData(),
 				true);
 	else
 		setNetworkParam(id, "identity", "NULL", false);
 	if (passwordEdit->isEnabled() && passwordEdit->text().length() > 0 &&
-	    strcmp(passwordEdit->text().toLocal8Bit().constData(),
+	    strcmp(passwordEdit->text().toAscii().constData(),
 		   WPA_GUI_KEY_DATA) != 0)
 		setNetworkParam(id, "password",
-				passwordEdit->text().toLocal8Bit().constData(),
+				passwordEdit->text().toAscii().constData(),
 				true);
 	else if (passwordEdit->text().length() == 0)
 		setNetworkParam(id, "password", "NULL", false);
 	if (cacertEdit->isEnabled() && cacertEdit->text().length() > 0)
 		setNetworkParam(id, "ca_cert",
-				cacertEdit->text().toLocal8Bit().constData(),
+				cacertEdit->text().toAscii().constData(),
 				true);
 	else
 		setNetworkParam(id, "ca_cert", "NULL", false);
@@ -389,7 +390,7 @@ void NetworkConfig::addNetwork()
 
 	if (idstrEdit->isEnabled() && idstrEdit->text().length() > 0)
 		setNetworkParam(id, "id_str",
-				idstrEdit->text().toLocal8Bit().constData(),
+				idstrEdit->text().toAscii().constData(),
 				true);
 	else
 		setNetworkParam(id, "id_str", "NULL", false);
@@ -397,7 +398,7 @@ void NetworkConfig::addNetwork()
 	if (prioritySpinBox->isEnabled()) {
 		QString prio;
 		prio = prio.setNum(prioritySpinBox->value());
-		setNetworkParam(id, "priority", prio.toLocal8Bit().constData(),
+		setNetworkParam(id, "priority", prio.toAscii().constData(),
 				false);
 	}
 
@@ -405,10 +406,9 @@ void NetworkConfig::addNetwork()
 	reply_len = sizeof(reply);
 	wpagui->ctrlRequest(cmd, reply, &reply_len);
 	if (strncmp(reply, "OK", 2) != 0) {
-		QMessageBox::warning(this, "wpa_gui",
-				     tr("Failed to enable "
-					"network in wpa_supplicant\n"
-					"configuration."));
+		QMessageBox::warning(this, "wpa_gui", "Failed to enable "
+				     "network in wpa_supplicant\n"
+				     "configuration.");
 		/* Network was added, so continue anyway */
 	}
 	wpagui->triggerUpdate();
@@ -469,7 +469,7 @@ void NetworkConfig::writeWepKey(int network_id, QLineEdit *edit, int id)
 	 * Assume hex key if only hex characters are present and length matches
 	 * with 40, 104, or 128-bit key
 	 */
-	txt = edit->text().toLocal8Bit().constData();
+	txt = edit->text().toAscii().constData();
 	if (strcmp(txt, WPA_GUI_KEY_DATA) == 0)
 		return;
 	len = strlen(txt);
@@ -792,12 +792,13 @@ void NetworkConfig::removeNetwork()
 	char reply[10], cmd[256];
 	size_t reply_len;
 
-	if (QMessageBox::information(
-		    this, "wpa_gui",
-		    tr("This will permanently remove the network\n"
-		       "from the configuration. Do you really want\n"
-		       "to remove this network?"),
-		    QMessageBox::Yes, QMessageBox::No) != 0)
+	if (QMessageBox::information(this, "wpa_gui",
+				     "This will permanently remove the "
+				     "network\n"
+				     "from the configuration. Do you really "
+				     "want\n"
+				     "to remove this network?", "Yes", "No")
+	    != 0)
 		return;
 
 	snprintf(cmd, sizeof(cmd), "REMOVE_NETWORK %d", edit_network_id);
@@ -805,9 +806,9 @@ void NetworkConfig::removeNetwork()
 	wpagui->ctrlRequest(cmd, reply, &reply_len);
 	if (strncmp(reply, "OK", 2) != 0) {
 		QMessageBox::warning(this, "wpa_gui",
-				     tr("Failed to remove network from "
-					"wpa_supplicant\n"
-					"configuration."));
+				     "Failed to remove network from "
+				     "wpa_supplicant\n"
+				     "configuration.");
 	} else {
 		wpagui->triggerUpdate();
 		wpagui->ctrlRequest("SAVE_CONFIG", reply, &reply_len);

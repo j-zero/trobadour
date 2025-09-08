@@ -70,10 +70,6 @@ PORTABILITY
 #include <stdio.h>
 #include <errno.h>
 
-#ifdef _REENT_THREAD_LOCAL
-_Thread_local _mbstate_t _tls_mbsrtowcs_state;
-#endif
-
 size_t
 _mbsnrtowcs_r (struct _reent *r,
 	wchar_t *dst,
@@ -130,7 +126,7 @@ _mbsnrtowcs_r (struct _reent *r,
       else
 	{
 	  ps->__count = 0;
-	  _REENT_ERRNO(r) = EILSEQ;
+	  r->_errno = EILSEQ;
 	  return (size_t)-1;
 	}
     }

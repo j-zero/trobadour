@@ -17,7 +17,9 @@ void free(void *) _ATTRIBUTE((__weak__));
 __LOCK_INIT_RECURSIVE(, __atexit_recursive_mutex);
 #endif
 
-struct _atexit *__atexit = _NULL;
+#ifdef _REENT_GLOBAL_ATEXIT
+struct _atexit *_global_atexit = _NULL;
+#endif
 
 #ifdef _WANT_REGISTER_FINI
 
@@ -47,7 +49,7 @@ static void
 register_fini(void)
 {
   if (&__libc_fini) {
-#ifdef _HAVE_INITFINI_ARRAY
+#ifdef HAVE_INITFINI_ARRAY
     extern void __libc_fini_array (void);
     atexit (__libc_fini_array);
 #else
@@ -81,8 +83,8 @@ __call_exitprocs (int code, void *d)
 
  restart:
 
-  p = __atexit;
-  lastp = &__atexit;
+  p = _GLOBAL_ATEXIT;
+  lastp = &_GLOBAL_ATEXIT;
   while (p)
     {
 #ifdef _REENT_SMALL

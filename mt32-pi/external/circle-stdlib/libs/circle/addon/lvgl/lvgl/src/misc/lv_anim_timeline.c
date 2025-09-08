@@ -8,12 +8,9 @@
  *********************/
 #include "lv_anim_private.h"
 #include "lv_assert.h"
-#include "lv_anim_timeline_private.h"
+#include "lv_anim_timeline.h"
 #include "../stdlib/lv_mem.h"
 #include "../stdlib/lv_string.h"
-#if LV_USE_OBJ_NAME
-    #include "../core/lv_obj_tree.h"
-#endif
 
 /*********************
  *      DEFINES
@@ -22,6 +19,23 @@
 /**********************
  *      TYPEDEFS
  **********************/
+/*Data of anim_timeline_dsc*/
+typedef struct {
+    lv_anim_t anim;
+    uint32_t start_time;
+    uint8_t is_started : 1;
+    uint8_t is_completed : 1;
+} lv_anim_timeline_dsc_t;
+
+/*Data of anim_timeline*/
+struct lv_anim_timeline_t {
+    lv_anim_timeline_dsc_t * anim_dsc;  /**< Dynamically allocated anim dsc array*/
+    uint32_t anim_dsc_cnt;              /**< The length of anim dsc array*/
+    uint32_t act_time;                  /**< Current time of the animation*/
+    bool reverse;                       /**< Reverse playback*/
+    uint32_t repeat_count;              /**< Repeat count*/
+    uint32_t repeat_delay;              /**< Wait before repeat*/
+};
 
 /**********************
  *  STATIC PROTOTYPES
@@ -29,7 +43,6 @@
 static void anim_timeline_exec_cb(void * var, int32_t v);
 static void anim_timeline_set_act_time(lv_anim_timeline_t * at, uint32_t act_time);
 static int32_t anim_timeline_path_cb(const lv_anim_t * a);
-static void exec_anim(lv_anim_timeline_t * at, lv_anim_t * a, int32_t v);
 
 /**********************
  *  STATIC VARIABLES
@@ -79,7 +92,7 @@ uint32_t lv_anim_timeline_start(lv_anim_timeline_t * at)
 
     uint32_t playtime = lv_anim_timeline_get_playtime(at);
     uint32_t repeat = at->repeat_count;
-    uint32_t repeat_delay = at->repeat_delay;
+    uint32_t delay = at->repeat_delay;
     uint32_t start = at->act_time;
     uint32_t end = at->reverse ? 0 : playtime;
     uint32_t duration = end > start ? end - start : start - end;
@@ -91,21 +104,15 @@ uint32_t lv_anim_timeline_start(lv_anim_timeline_t * at)
         }
     }
 
-    /*Apply the delay only if playing from any ends*/
-    uint32_t delay = 0;
-    if(!at->reverse && at->act_time == 0) delay = at->delay;
-    else if(at->reverse && at->act_time == playtime) delay = at->delay;
-
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, at);
     lv_anim_set_exec_cb(&a, anim_timeline_exec_cb);
     lv_anim_set_values(&a, start, end);
-    lv_anim_set_duration(&a, duration);
-    lv_anim_set_delay(&a, delay);
+    lv_anim_set_time(&a, duration);
     lv_anim_set_path_cb(&a, anim_timeline_path_cb);
     lv_anim_set_repeat_count(&a, repeat);
-    lv_anim_set_repeat_delay(&a, repeat_delay);
+    lv_anim_set_repeat_delay(&a, delay);
     lv_anim_start(&a);
     return playtime;
 }
@@ -121,12 +128,6 @@ void lv_anim_timeline_set_reverse(lv_anim_timeline_t * at, bool reverse)
 {
     LV_ASSERT_NULL(at);
     at->reverse = reverse;
-}
-
-void lv_anim_timeline_set_delay(lv_anim_timeline_t * at, uint32_t delay)
-{
-    LV_ASSERT_NULL(at);
-    at->delay = delay;
 }
 
 void lv_anim_timeline_set_repeat_count(lv_anim_timeline_t * at, uint32_t cnt)
@@ -149,22 +150,6 @@ void lv_anim_timeline_set_progress(lv_anim_timeline_t * at, uint16_t progress)
     uint32_t act_time = lv_map(progress, 0, LV_ANIM_TIMELINE_PROGRESS_MAX, 0, playtime);
     anim_timeline_set_act_time(at, act_time);
 }
-
-void lv_anim_timeline_set_user_data(lv_anim_timeline_t * at, void * user_data)
-{
-    LV_ASSERT_NULL(at);
-    at->user_data = user_data;
-}
-
-#if LV_USE_OBJ_NAME
-
-void lv_anim_timeline_set_base_obj(lv_anim_timeline_t * at, lv_obj_t * base_obj)
-{
-    LV_ASSERT_NULL(at);
-    at->base_obj = base_obj;
-}
-
-#endif
 
 uint32_t lv_anim_timeline_get_playtime(lv_anim_timeline_t * at)
 {
@@ -190,13 +175,6 @@ bool lv_anim_timeline_get_reverse(lv_anim_timeline_t * at)
     return at->reverse;
 }
 
-
-uint32_t lv_anim_timeline_get_delay(lv_anim_timeline_t * at)
-{
-    LV_ASSERT_NULL(at);
-    return at->delay;
-}
-
 uint16_t lv_anim_timeline_get_progress(lv_anim_timeline_t * at)
 {
     LV_ASSERT_NULL(at);
@@ -216,22 +194,6 @@ uint32_t lv_anim_timeline_get_repeat_delay(lv_anim_timeline_t * at)
     return  at->repeat_delay;
 }
 
-void * lv_anim_timeline_get_user_data(lv_anim_timeline_t * at)
-{
-    LV_ASSERT_NULL(at);
-    return at->user_data;
-}
-
-
-#if LV_USE_OBJ_NAME
-
-lv_obj_t * lv_anim_timeline_get_base_obj(lv_anim_timeline_t * at)
-{
-    LV_ASSERT_NULL(at);
-    return at->base_obj;
-}
-
-#endif
 /**********************
  *   STATIC FUNCTIONS
  **********************/
@@ -243,6 +205,10 @@ static void anim_timeline_set_act_time(lv_anim_timeline_t * at, uint32_t act_tim
     for(uint32_t i = 0; i < at->anim_dsc_cnt; i++) {
         lv_anim_timeline_dsc_t * anim_dsc = &(at->anim_dsc[i]);
         lv_anim_t * a = &(anim_dsc->anim);
+
+        if(a->exec_cb == NULL && a->custom_exec_cb == NULL) {
+            continue;
+        }
 
         uint32_t start_time = anim_dsc->start_time;
         int32_t value = 0;
@@ -259,7 +225,8 @@ static void anim_timeline_set_act_time(lv_anim_timeline_t * at, uint32_t act_tim
             }
 
             value = a->start_value;
-            exec_anim(at, a, value);
+            if(a->exec_cb) a->exec_cb(a->var, value);
+            if(a->custom_exec_cb) a->custom_exec_cb(a, value);
 
             if(anim_timeline_is_started) {
                 if(at->reverse) {
@@ -279,7 +246,8 @@ static void anim_timeline_set_act_time(lv_anim_timeline_t * at, uint32_t act_tim
 
             a->act_time = act_time - start_time;
             value = a->path_cb(a);
-            exec_anim(at, a, value);
+            if(a->exec_cb) a->exec_cb(a->var, value);
+            if(a->custom_exec_cb) a->custom_exec_cb(a, value);
 
             if(anim_timeline_is_started) {
                 if(at->reverse) {
@@ -314,7 +282,8 @@ static void anim_timeline_set_act_time(lv_anim_timeline_t * at, uint32_t act_tim
             }
 
             value = a->end_value;
-            exec_anim(at, a, value);
+            if(a->exec_cb) a->exec_cb(a->var, value);
+            if(a->custom_exec_cb) a->custom_exec_cb(a, value);
 
             if(anim_timeline_is_started) {
                 if(at->reverse) {
@@ -339,40 +308,4 @@ static void anim_timeline_exec_cb(void * var, int32_t v)
 {
     lv_anim_timeline_t * at = var;
     anim_timeline_set_act_time(at, v);
-}
-
-static void exec_anim(lv_anim_timeline_t * at, lv_anim_t * a, int32_t v)
-{
-
-    /*a->var stores children names if at->base_obj is set. */
-#if LV_USE_OBJ_NAME
-    lv_obj_t * obj_resolved;
-    if(at->base_obj) {
-        if(lv_streq(a->var, "self")) obj_resolved = at->base_obj;
-        else if(lv_streq(a->var, "")) obj_resolved = at->base_obj;
-        else obj_resolved = lv_obj_find_by_name(at->base_obj, a->var);
-        if(obj_resolved == NULL) {
-            LV_LOG_WARN("Widget was not found with name `%s` as child of %p", (const char *)a->var, (void *)at->base_obj);
-            return;
-        }
-    }
-    else {
-        obj_resolved = a->var;
-    }
-#else
-    LV_UNUSED(at);
-    lv_obj_t * obj_resolved = a->var;
-#endif
-
-
-    if(a->exec_cb) {
-        a->exec_cb(obj_resolved, v);
-    }
-    if(a->custom_exec_cb) {
-        /*Temporarily replace the var with the resolved object*/
-        void * var_ori = a->var;
-        a->var = obj_resolved;
-        a->custom_exec_cb(a, v);
-        a->var = var_ori;
-    }
 }

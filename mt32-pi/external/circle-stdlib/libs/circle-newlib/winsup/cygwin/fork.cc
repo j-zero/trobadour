@@ -31,7 +31,7 @@ details. */
 /* FIXME: Once things stabilize, bump up to a few minutes.  */
 #define FORK_WAIT_TIMEOUT (300 * 1000)     /* 300 seconds */
 
-static int dofork (void **proc, bool *with_forkables);
+static int dofork (bool *with_forkables);
 class frok
 {
   frok (bool *forkables)
@@ -44,10 +44,10 @@ class frok
   int child_pid;
   int this_errno;
   HANDLE hchild;
-  int parent (volatile char * volatile here);
-  int child (volatile char * volatile here);
+  int __stdcall parent (volatile char * volatile here);
+  int __stdcall child (volatile char * volatile here);
   bool error (const char *fmt, ...);
-  friend int dofork (void **proc, bool *with_forkables);
+  friend int dofork (bool *with_forkables);
 };
 
 static void
@@ -59,7 +59,7 @@ resume_child (HANDLE forker_finished)
 }
 
 /* Notify parent that it is time for the next step. */
-static void
+static void __stdcall
 sync_with_parent (const char *s, bool hang_self)
 {
   debug_printf ("signalling parent: %s", s);
@@ -131,9 +131,37 @@ child_info::prefork (bool detached)
     }
 }
 
-int
+int __stdcall
 frok::child (volatile char * volatile here)
 {
+  cygheap_fdenum cfd (false);
+  while (cfd.next () >= 0)
+    if (cfd->get_major () == DEV_PTYM_MAJOR)
+      {
+	fhandler_base *fh = cfd;
+	fhandler_pty_master *ptym = (fhandler_pty_master *) fh;
+	if (ptym->getPseudoConsole ())
+	  {
+	    debug_printf ("found a PTY master %d: helper_PID=%d",
+			  ptym->get_minor (), ptym->getHelperProcessId ());
+	    if (fhandler_console::get_console_process_id (
+				ptym->getHelperProcessId (), true))
+	      /* Already attached */
+	      break;
+	    else
+	      {
+		if (ptym->attach_pcon_in_fork ())
+		  {
+		    FreeConsole ();
+		    if (!AttachConsole (ptym->getHelperProcessId ()))
+		      /* Error */;
+		    else
+		      break;
+		  }
+	      }
+	  }
+      }
+
   HANDLE& hParent = ch.parent;
 
   sync_with_parent ("after longjmp", true);
@@ -202,7 +230,7 @@ frok::child (volatile char * volatile here)
   return 0;
 }
 
-int
+int __stdcall
 frok::parent (volatile char * volatile stack_here)
 {
   HANDLE forker_finished;
@@ -212,37 +240,7 @@ frok::parent (volatile char * volatile stack_here)
   bool fix_impersonation = false;
   pinfo child;
 
-  /* Inherit scheduling parameters by default. */
-  int child_nice = myself->nice;
-  int child_sched_policy = myself->sched_policy;
-  int c_flags = 0;
-
-  /* Handle SCHED_RESET_ON_FORK flag. */
-  if (myself->sched_reset_on_fork)
-    {
-      bool batch = (myself->sched_policy == SCHED_BATCH);
-      bool idle = (myself->sched_policy == SCHED_IDLE);
-      bool set_prio = false;
-      /* Reset negative nice values to zero. */
-      if (myself->nice < 0)
-	{
-	  child_nice = 0;
-	  set_prio = !idle;
-	}
-      /* Reset realtime policies to SCHED_OTHER. */
-      if (!(myself->sched_policy == SCHED_OTHER || batch || idle))
-	{
-	  child_sched_policy = SCHED_OTHER;
-	  set_prio = true;
-	}
-      if (set_prio)
-	c_flags = nice_to_winprio (child_nice, batch);
-    }
-
-  /* Always request a priority because otherwise anything above
-     NORMAL_PRIORITY_CLASS would not be inherited. */
-  if (!c_flags)
-    c_flags = GetPriorityClass (GetCurrentProcess ());
+  int c_flags = GetPriorityClass (GetCurrentProcess ());
   debug_printf ("priority class %d", c_flags);
   /* Per MSDN, this must be specified even if lpEnvironment is set to NULL,
      otherwise UNICODE characters in the parent environment are not copied
@@ -326,10 +324,7 @@ frok::parent (volatile char * volatile stack_here)
   si.lpReserved2 = (LPBYTE) &ch;
   si.cbReserved2 = sizeof (ch);
 
-  /* NEVER, EVER, call a function which in turn calls malloc&friends while this
-     malloc lock is active! */
-  __malloc_lock ();
-  bool locked = true;
+  bool locked = __malloc_lock ();
 
   /* Remove impersonation */
   cygheap->user.deimpersonate ();
@@ -341,7 +336,8 @@ frok::parent (volatile char * volatile stack_here)
 
   ch.silentfail (!*with_forkables); /* fail silently without forkables */
 
-  PSECURITY_ATTRIBUTES sa = (PSECURITY_ATTRIBUTES) alloca (1024);
+  tmp_pathbuf tp;
+  PSECURITY_ATTRIBUTES sa = (PSECURITY_ATTRIBUTES) tp.w_get ();
   if (!sec_user_nih (sa, cygheap->user.saved_sid (),
 		     well_known_authenticated_users_sid,
 		     PROCESS_QUERY_LIMITED_INFORMATION))
@@ -431,9 +427,7 @@ frok::parent (volatile char * volatile stack_here)
       goto cleanup;
     }
 
-  child->nice = child_nice;
-  child->sched_policy = child_sched_policy;
-  child->sched_reset_on_fork = false;
+  child->nice = myself->nice;
 
   /* Initialize things that are done later in dll_crt0_1 that aren't done
      for the forkee.  */
@@ -449,7 +443,7 @@ frok::parent (volatile char * volatile stack_here)
      it in afterwards.  This requires more bookkeeping than I like, though,
      so we'll just do it the easy way.  So, terminate any child process if
      we can't actually record the pid in the internal table. */
-  if (!child.remember ())
+  if (!child.remember (false))
     {
       this_errno = EAGAIN;
 #ifdef DEBUGGING0
@@ -543,11 +537,11 @@ frok::parent (volatile char * volatile stack_here)
 
   /* Do not attach to the child before it has successfully initialized.
      Otherwise we may wait forever, or deliver an orphan SIGCHILD. */
-  if (!child.attach ())
+  if (!child.reattach ())
     {
       this_errno = EAGAIN;
 #ifdef DEBUGGING0
-      error ("child attach failed");
+      error ("child reattach failed");
 #endif
       goto cleanup;
     }
@@ -587,36 +581,17 @@ extern "C" int
 fork ()
 {
   bool with_forkables = false; /* do not force hardlinks on first try */
-  int res = dofork (NULL, &with_forkables);
+  int res = dofork (&with_forkables);
   if (res >= 0)
     return res;
   if (with_forkables)
     return res; /* no need for second try when already enabled */
   with_forkables = true; /* enable hardlinks for second try */
-  return dofork (NULL, &with_forkables);
-}
-
-
-/* __posix_spawn_fork is called from newlib's posix_spawn implementation.
-   The original code in newlib has been taken from FreeBSD, and the core
-   code relies on specific, non-portable behaviour of vfork(2).  Our
-   replacement implementation needs the forked child's HANDLE for
-   synchronization, so __posix_spawn_fork returns it in proc. */
-extern "C" int
-__posix_spawn_fork (void **proc)
-{
-  bool with_forkables = false; /* do not force hardlinks on first try */
-  int res = dofork (proc, &with_forkables);
-  if (res >= 0)
-    return res;
-  if (with_forkables)
-    return res; /* no need for second try when already enabled */
-  with_forkables = true; /* enable hardlinks for second try */
-  return dofork (proc, &with_forkables);
+  return dofork (&with_forkables);
 }
 
 static int
-dofork (void **proc, bool *with_forkables)
+dofork (bool *with_forkables)
 {
   frok grouped (with_forkables);
 
@@ -663,7 +638,7 @@ dofork (void **proc, bool *with_forkables)
 #ifdef __x86_64__
     __asm__ volatile ("movq %%rsp,%0": "=r" (stackp));
 #else
-#error unimplemented for this target
+    __asm__ volatile ("movl %%esp,%0": "=r" (stackp));
 #endif
 
     if (!ischild)
@@ -671,7 +646,7 @@ dofork (void **proc, bool *with_forkables)
     else
       {
 	res = grouped.child (stackp);
-	__in_forkee = FORKED;
+	in_forkee = false;
 	ischild = true;	/* might have been reset by fork mem copy */
       }
   }
@@ -693,11 +668,6 @@ dofork (void **proc, bool *with_forkables)
 		       grouped.errmsg, grouped.this_errno);
 
       set_errno (grouped.this_errno);
-    }
-  else if (proc)
-    {
-      /* Return child process handle to posix_fork. */
-      *proc = grouped.hchild;
     }
   syscall_printf ("%R = fork()", res);
   return res;

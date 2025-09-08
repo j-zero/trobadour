@@ -110,7 +110,7 @@ struct usc_errno_t TEST_VALID_ENO[USC_MAX_ERRNO];
    * Globals for returning the return code and errno from the system call
    * test macros.
    ***********************************************************************/
-long TEST_RETURN;
+int TEST_RETURN;
 int TEST_ERRNO;
 
   /***********************************************************************
@@ -198,11 +198,7 @@ int STD_ERRNO_LIST[USC_MAX_ERRNO];
 #define STRLEN 2048
 
 static char Mesg2[STRLEN];	/* holds possible return string */
-static void usc_recressive_func(
-	int cnt,
-	int max,
-	struct usc_bigstack_t **bstack
-);
+static void usc_recressive_func();
 
 /*
  * Define bits for options that might have env variable default
@@ -587,7 +583,7 @@ STD_opts_help()
 
     for(i = 0; std_options[i].optstr; ++i) {
 	if (std_options[i].help)
-	    fputs(std_options[i].help, stdout);
+	    printf(std_options[i].help);
     }
 }
 
@@ -637,7 +633,7 @@ usc_global_setup_hook()
     if ( STD_PAUSE ) {                                      
         _TMP_FUNC = (int (*)())signal(SIGUSR1, STD_go);   
         pause();                                          
-        signal(SIGUSR1, (_sig_func_ptr)_TMP_FUNC);
+        signal(SIGUSR1, (void (*)())_TMP_FUNC);          
     }
 
 
@@ -697,7 +693,8 @@ get_current_time()
  * counter integer is supplied by the user program.
  ***********************************************************************/
 int
-usc_test_looping(int counter)
+usc_test_looping(counter)
+int counter;
 {
     static int first_time = 1;
     static int stop_time = 0;	/* stop time in rtc or usecs */
@@ -806,11 +803,10 @@ usc_test_looping(int counter)
  * This function recressively calls itself max times.
  */ 
 static void
-usc_recressive_func(
-    int cnt,
-    int max,
-    struct usc_bigstack_t **bstack
-)
+usc_recressive_func(cnt, max, bstack)
+int cnt;
+int max;
+struct usc_bigstack_t bstack;
 {
     if ( cnt < max )
 	usc_recressive_func(cnt+1, max, bstack);

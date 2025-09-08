@@ -32,8 +32,6 @@
 #include <complex.h>
 #include <math.h>
 
-/* On platforms where long double is as wide as double.  */
-#ifdef _LDBL_EQ_DBL
 long double complex
 cexpl(long double complex z)
 {
@@ -46,4 +44,3 @@ cexpl(long double complex z)
 	w = r * cosl(y) + r * sinl(y) * I;
 	return w;
 }
-#endif

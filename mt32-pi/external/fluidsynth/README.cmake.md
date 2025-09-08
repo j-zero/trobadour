@@ -34,10 +34,10 @@ file [CMakeLists.txt](./CMakeLists.txt#L634), lines 634-641:
 unset ( LIBINSTPATCH_SUPPORT CACHE )
 if ( enable-libinstpatch )
     find_package ( InstPatch ${LIBINSTPATCH_MINIMUM_VERSION} )
-    if ( InstPatch_FOUND )
-        set ( LIBINSTPATCH_SUPPORT 1 )
+    set ( LIBINSTPATCH_SUPPORT ${InstPatch_FOUND} )
+    if ( LIBINSTPATCH_SUPPORT )
         list( APPEND PC_REQUIRES_PRIV "libinstpatch-1.0")
-    endif ( InstPatch_FOUND )
+    endif (LIBINSTPATCH_SUPPORT )
 endif ( enable-libinstpatch )
 ```
 

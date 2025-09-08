@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <time.h>
 #include <unistd.h>
-#include <limits.h>
 
 unsigned sleep(unsigned seconds)
 {
@@ -16,7 +15,7 @@ unsigned sleep(unsigned seconds)
     ts.tv_sec = seconds;
     ts.tv_nsec = 0;
     if (!nanosleep(&ts,&ts)) return 0;
-    if (errno == EINTR) return ts.tv_sec & UINT_MAX;
+    if (errno == EINTR) return ts.tv_sec;
     return -1;
 }
 

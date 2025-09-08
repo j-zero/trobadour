@@ -3,15 +3,20 @@
  *
  * Copyright (c) 2003-2007, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
 #include "aes.h"
-#include "aes_wrap.h"
 
 /**
  * aes_128_cbc_encrypt - AES-128 CBC encryption
@@ -27,9 +32,6 @@ int aes_128_cbc_encrypt(const u8 *key, const u8 *iv, u8 *data, size_t data_len)
 	u8 cbc[AES_BLOCK_SIZE];
 	u8 *pos = data;
 	int i, j, blocks;
-
-	if (TEST_FAIL())
-		return -1;
 
 	ctx = aes_encrypt_init(key, 16);
 	if (ctx == NULL)
@@ -63,9 +65,6 @@ int aes_128_cbc_decrypt(const u8 *key, const u8 *iv, u8 *data, size_t data_len)
 	u8 cbc[AES_BLOCK_SIZE], tmp[AES_BLOCK_SIZE];
 	u8 *pos = data;
 	int i, j, blocks;
-
-	if (TEST_FAIL())
-		return -1;
 
 	ctx = aes_decrypt_init(key, 16);
 	if (ctx == NULL)

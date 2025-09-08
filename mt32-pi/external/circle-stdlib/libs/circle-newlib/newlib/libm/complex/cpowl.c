@@ -32,8 +32,6 @@
 #include <complex.h>
 #include <math.h>
 
-/* On platforms where long double is as wide as double.  */
-#ifdef _LDBL_EQ_DBL
 long double complex
 cpowl(long double complex a, long double complex z)
 {
@@ -56,4 +54,3 @@ cpowl(long double complex a, long double complex z)
 	w = r * cosl(theta) + (r * sinl(theta)) * I;
 	return w;
 }
-#endif

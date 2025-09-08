@@ -133,11 +133,11 @@ ull * current = buffer;
 
 static int is_valid (void * ptr)
 {
-  uintptr_t iptr = (uintptr_t) ptr;
+  unsigned int iptr = (unsigned int) ptr;
   ull * ullptr = (ull *) ptr;
 
   iptr = (iptr / sizeof(ull)) * sizeof(ull);
-  if (iptr != (uintptr_t) ptr)
+  if (iptr != (int) ptr)
     return 0;
   if (--ullptr < buffer || ullptr[0] > SIZE || ullptr  + ullptr[0]  > current)
     return 0;

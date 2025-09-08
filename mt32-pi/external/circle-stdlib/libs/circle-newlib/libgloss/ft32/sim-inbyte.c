@@ -13,7 +13,6 @@
  * the new terms are clearly indicated on the first page of each file where
  * they apply.
  */
-#include <unistd.h>
 
 int
 inbyte ()

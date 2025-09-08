@@ -8,3 +8,4 @@
 #undef __NEWLIB_PATCHLEVEL__
 
 #endif /* !_NEWLIB_VERSION_H__ */
+

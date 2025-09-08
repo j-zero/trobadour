@@ -27,6 +27,10 @@ details. */
 #include <assert.h>
 #include <tls_pbuf.h>
 
+/* Allow concurrent processes to use the same dll or exe
+ * via their hardlink while we delete our hardlink. */
+extern NTSTATUS unlink_nt_shareable (path_conv &pc);
+
 #define MUTEXSEP L"@"
 #define PATHSEP L"\\"
 
@@ -128,7 +132,7 @@ rmdirs (WCHAR ntmaxpathbuf[NT_MAX_PATH])
 	      RtlInitUnicodeString (&fn, ntmaxpathbuf);
 
 	      path_conv pc (&fn);
-	      unlink_nt (pc, true); /* move to bin */
+	      unlink_nt_shareable (pc); /* move to bin */
 	    }
 
 	  if (!pfdi->NextEntryOffset)
@@ -309,7 +313,7 @@ struct namepart {
   bool create_dir;
 };
 /* mutex name is formed along dir names */
-static namepart const
+static namepart NO_COPY_RO const
 forkable_nameparts[] = {
  /* text             textfunc  mutex_from_dir  create */
   { L"<cygroot>",    rootname,          false, false, },

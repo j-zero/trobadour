@@ -5,9 +5,11 @@
  *  SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  */
 
-#define MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
-
-#include "mbedtls/build_info.h"
+#if !defined(MBEDTLS_CONFIG_FILE)
+#include "mbedtls/config.h"
+#else
+#include MBEDTLS_CONFIG_FILE
+#endif
 
 #include "mbedtls/platform.h"
 
@@ -47,8 +49,8 @@ struct options {
     const char *output_file;    /* where to store the output              */
 } opt;
 
-static int convert_pem_to_der(const unsigned char *input, size_t ilen,
-                              unsigned char *output, size_t *olen)
+int convert_pem_to_der(const unsigned char *input, size_t ilen,
+                       unsigned char *output, size_t *olen)
 {
     int ret;
     const unsigned char *s1, *s2, *end = input + ilen;
@@ -261,6 +263,11 @@ usage:
 
 exit:
     free(pem_buffer);
+
+#if defined(_WIN32)
+    mbedtls_printf("  + Press Enter to exit this program.\n");
+    fflush(stdout); getchar();
+#endif
 
     mbedtls_exit(exit_code);
 }

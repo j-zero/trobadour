@@ -11,23 +11,17 @@ details. */
 #ifndef _CYGWIN_CORE_DUMP_H
 #define _CYGWIN_CORE_DUMP_H
 
-/*
-  Note that elfcore_grok_win32pstatus() in libbfd relies on the precise layout
-  of these structures.
-*/
-
 #include <windows.h>
 
 #define	NOTE_INFO_PROCESS	1
 #define	NOTE_INFO_THREAD	2
 #define	NOTE_INFO_MODULE	3
-#define	NOTE_INFO_MODULE64	4
 
 struct win32_core_process_info
 {
   DWORD pid;
-  DWORD signal;
-  DWORD command_line_size;
+  int signal;
+  int command_line_size;
   char command_line[1];
 }
 #ifdef __GNUC__
@@ -46,12 +40,10 @@ struct win32_core_thread_info
 #endif
 ;
 
-/* Used with data_type NOTE_INFO_MODULE or NOTE_INFO_MODULE64, depending on
-   arch */
 struct win32_core_module_info
 {
   void* base_address;
-  DWORD module_name_size;
+  int module_name_size;
   char module_name[1];
 }
 #ifdef __GNUC__
@@ -61,7 +53,7 @@ struct win32_core_module_info
 
 struct win32_pstatus
 {
-  DWORD data_type;
+  unsigned long data_type;
   union
     {
       struct win32_core_process_info process_info;

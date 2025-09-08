@@ -114,7 +114,6 @@ main(int ac, char **av)
 				/*NOTREACHED*/
 				exit(exno);
 			}
-			usleep(1000);
 			kill(fake_pid, TEST_SIG);
 			waitpid(fake_pid, &fake_status, 0);
 			TEST(kill(fake_pid, TEST_SIG));

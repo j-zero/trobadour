@@ -1,8 +1,9 @@
-CFLAGS += -DCONFIG_HS20
+all:
+	@echo Nothing to be made.
 
-LIB_OBJS= \
-	eap_server.o \
-	eap_server_identity.o \
-	eap_server_methods.o
+clean:
+	for d in $(SUBDIRS); do make -C $$d clean; done
+	rm -f *~ *.o *.d
 
-include ../lib.rules
+install:
+	@echo Nothing to be made.

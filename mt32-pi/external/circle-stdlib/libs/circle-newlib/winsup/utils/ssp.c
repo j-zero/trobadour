@@ -49,7 +49,12 @@ typedef DWORD64 CONTEXT_REG;
 #define CONTEXT_REG_FMT "%016llx"
 #define ADDR_SSCANF_FMT "%lli"
 #else
-#error unimplemented for this target
+#define KERNEL_ADDR 0x77000000
+#define CONTEXT_SP Esp
+#define CONTEXT_IP Eip
+typedef DWORD CONTEXT_REG;
+#define CONTEXT_REG_FMT "%08lx"
+#define ADDR_SSCANF_FMT "%li"
 #endif
 
 #define TRACE_SSP 0
@@ -258,7 +263,10 @@ dump_registers (HANDLE thread)
   printf ("esi %016llx edi %016llx ebp %016llx esp %016llx %016llx\n",
 	  context.Rsi, context.Rdi, context.Rbp, context.Rsp, context.Rip);
 #else
-#error unimplemented for this target
+  printf ("eax %08lx ebx %08lx ecx %08lx edx %08lx eip\n",
+	  context.Eax, context.Ebx, context.Ecx, context.Edx);
+  printf ("esi %08lx edi %08lx ebp %08lx esp %08lx %08lx\n",
+	  context.Esi, context.Edi, context.Ebp, context.Esp, context.Eip);
 #endif
 }
 
@@ -457,7 +465,7 @@ run_program (char *cmdline)
 		      thread_return_address[tix] = rv;
 		}
 	      set_step_threads (event.dwThreadId, stepping_enabled);
-	      /*FALLTHRU*/
+	      /* fall-through */
 	    case STATUS_SINGLE_STEP:
 	      opcode_count++;
 	      pc = (CONTEXT_REG)event.u.Exception.ExceptionRecord.ExceptionAddress;
@@ -666,7 +674,7 @@ run_program (char *cmdline)
 
 }
 
-static void __attribute__ ((__noreturn__))
+static void
 usage (FILE * stream)
 {
   fprintf (stream , ""
@@ -872,6 +880,7 @@ main (int argc, char **argv)
 	break;
       case 'h':
 	usage (stdout);
+	break;
       case 'l':
 	printf ("profiling dll usage\n");
 	dll_counts = 1;
@@ -939,7 +948,8 @@ main (int argc, char **argv)
       /*       1234567 123% 1234567 123% 1234567812345678 xxxxxxxxxxx */
       printf (" Main-Thread Other-Thread BaseAddr         DLL Name\n");
 #else
-#error unimplemented for this target
+      /*       1234567 123% 1234567 123% 12345678 xxxxxxxxxxx */
+      printf (" Main-Thread Other-Thread BaseAddr DLL Name\n");
 #endif
 
       total_pcount = 0;

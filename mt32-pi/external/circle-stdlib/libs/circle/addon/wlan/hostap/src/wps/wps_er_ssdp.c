@@ -2,8 +2,14 @@
  * Wi-Fi Protected Setup - External Registrar (SSDP)
  * Copyright (c) 2009, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -35,9 +41,6 @@ static void wps_er_ssdp_rx(int sd, void *eloop_ctx, void *sock_ctx)
 	if (nread <= 0)
 		return;
 	buf[nread] = '\0';
-	if (er->filter_addr.s_addr &&
-	    er->filter_addr.s_addr != addr.sin_addr.s_addr)
-		return;
 
 	wpa_printf(MSG_DEBUG, "WPS ER: Received SSDP from %s",
 		   inet_ntoa(addr.sin_addr));
@@ -78,7 +81,9 @@ static void wps_er_ssdp_rx(int sd, void *eloop_ctx, void *sock_ctx)
 			if (os_strstr(start, "ssdp:byebye"))
 				byebye = 1;
 		} else if (os_strncasecmp(start, "CACHE-CONTROL:", 14) == 0) {
-			start += 14;
+			start += 9;
+			while (*start == ' ')
+				start++;
 			pos2 = os_strstr(start, "max-age=");
 			if (pos2 == NULL)
 				continue;
@@ -91,12 +96,7 @@ static void wps_er_ssdp_rx(int sd, void *eloop_ctx, void *sock_ctx)
 				pos2 += 5;
 				while (*pos2 == ' ')
 					pos2++;
-				if (uuid_str2bin(pos2, uuid) < 0) {
-					wpa_printf(MSG_DEBUG, "WPS ER: "
-						   "Invalid UUID in USN: %s",
-						   pos2);
-					return;
-				}
+				uuid_str2bin(pos2, uuid);
 			}
 		}
 	}
@@ -105,7 +105,6 @@ static void wps_er_ssdp_rx(int sd, void *eloop_ctx, void *sock_ctx)
 		return; /* Not WPS advertisement/reply */
 
 	if (byebye) {
-		wps_er_ap_cache_settings(er, &addr.sin_addr);
 		wps_er_ap_remove(er, &addr.sin_addr);
 		return;
 	}
@@ -158,27 +157,16 @@ void wps_er_send_ssdp_msearch(struct wps_er *er)
 
 int wps_er_ssdp_init(struct wps_er *er)
 {
-	if (add_ssdp_network(er->ifname)) {
-		wpa_printf(MSG_INFO, "WPS ER: Failed to add routing entry for "
-			   "SSDP");
+	if (add_ssdp_network(er->ifname))
 		return -1;
-	}
 
-	er->multicast_sd = ssdp_open_multicast_sock(er->ip_addr,
-						    er->forced_ifname ?
-						    er->ifname : NULL);
-	if (er->multicast_sd < 0) {
-		wpa_printf(MSG_INFO, "WPS ER: Failed to open multicast socket "
-			   "for SSDP");
+	er->multicast_sd = ssdp_open_multicast_sock(er->ip_addr);
+	if (er->multicast_sd < 0)
 		return -1;
-	}
 
 	er->ssdp_sd = ssdp_listener_open();
-	if (er->ssdp_sd < 0) {
-		wpa_printf(MSG_INFO, "WPS ER: Failed to open SSDP listener "
-			   "socket");
+	if (er->ssdp_sd < 0)
 		return -1;
-	}
 
 	if (eloop_register_sock(er->multicast_sd, EVENT_TYPE_READ,
 				wps_er_ssdp_rx, er, NULL) ||

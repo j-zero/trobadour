@@ -86,9 +86,9 @@
 #ifndef _DOUBLE_IS_32BITS
 
 #ifdef __STDC__
-static	const volatile double	one	= 1.0, tiny=1.0e-300;
+static	const double	one	= 1.0, tiny=1.0e-300;
 #else
-static	double	volatile one	= 1.0, tiny=1.0e-300;
+static	double	one	= 1.0, tiny=1.0e-300;
 #endif
 
 #ifdef __STDC__

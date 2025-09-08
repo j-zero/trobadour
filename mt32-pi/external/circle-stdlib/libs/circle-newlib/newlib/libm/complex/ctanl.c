@@ -34,8 +34,6 @@
 #include <math.h>
 #include "cephes_subrl.h"
 
-/* On platforms where long double is as wide as double.  */
-#ifdef _LDBL_EQ_DBL
 long double complex
 ctanl(long double complex z)
 {
@@ -56,4 +54,3 @@ ctanl(long double complex z)
 	w = sinl(2.0L * creall(z)) / d + (sinhl(2.0L * cimagl(z)) / d) * I;
 	return w;
 }
-#endif

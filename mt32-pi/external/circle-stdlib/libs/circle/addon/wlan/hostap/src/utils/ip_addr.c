@@ -2,8 +2,14 @@
  * IP address processing
  * Copyright (c) 2003-2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -33,6 +39,30 @@ const char * hostapd_ip_txt(const struct hostapd_ip_addr *addr, char *buf,
 }
 
 
+int hostapd_ip_diff(struct hostapd_ip_addr *a, struct hostapd_ip_addr *b)
+{
+	if (a == NULL && b == NULL)
+		return 0;
+	if (a == NULL || b == NULL)
+		return 1;
+
+	switch (a->af) {
+	case AF_INET:
+		if (a->u.v4.s_addr != b->u.v4.s_addr)
+			return 1;
+		break;
+#ifdef CONFIG_IPV6
+	case AF_INET6:
+		if (os_memcmp(&a->u.v6, &b->u.v6, sizeof(a->u.v6)) != 0)
+			return 1;
+		break;
+#endif /* CONFIG_IPV6 */
+	}
+
+	return 0;
+}
+
+
 int hostapd_parse_ip_addr(const char *txt, struct hostapd_ip_addr *addr)
 {
 #ifndef CONFIG_NATIVE_WINDOWS
@@ -50,23 +80,4 @@ int hostapd_parse_ip_addr(const char *txt, struct hostapd_ip_addr *addr)
 #endif /* CONFIG_NATIVE_WINDOWS */
 
 	return -1;
-}
-
-
-bool hostapd_ip_equal(const struct hostapd_ip_addr *a,
-		      const struct hostapd_ip_addr *b)
-{
-	if (a->af != b->af)
-		return false;
-
-	if (a->af == AF_INET && a->u.v4.s_addr == b->u.v4.s_addr)
-		return true;
-
-#ifdef CONFIG_IPV6
-	if (a->af == AF_INET6 &&
-	    os_memcmp(&a->u.v6, &b->u.v6, sizeof(a->u.v6)) == 0)
-		return true;
-#endif /* CONFIG_IPV6 */
-
-	return false;
 }

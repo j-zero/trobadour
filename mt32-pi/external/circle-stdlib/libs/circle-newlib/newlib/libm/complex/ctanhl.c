@@ -32,8 +32,6 @@
 #include <complex.h>
 #include <math.h>
 
-/* On platforms where long double is as wide as double.  */
-#ifdef _LDBL_EQ_DBL
 long double complex
 ctanhl(long double complex z)
 {
@@ -47,4 +45,3 @@ ctanhl(long double complex z)
 
 	return w;
 }
-#endif

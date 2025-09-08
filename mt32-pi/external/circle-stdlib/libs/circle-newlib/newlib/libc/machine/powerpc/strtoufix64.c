@@ -31,10 +31,10 @@ _strtoufix64_r (struct _reent *rptr,
     {
       if (ld_type == 1)
 	{
-	  _REENT_ERRNO(rptr) = EDOM;
+	  rptr->_errno = EDOM;
 	  return 0;
 	}
-      _REENT_ERRNO(rptr) = ERANGE;
+      rptr->_errno = ERANGE;
       if (word0(ldbl) & Sign_bit)
 	return 0;
       return ULONG_LONG_MAX;
@@ -60,14 +60,14 @@ _strtoufix64_r (struct _reent *rptr,
   /* check for saturation */
   if (sign)
     {
-      _REENT_ERRNO(rptr) = ERANGE;
+      rptr->_errno = ERANGE;
       return 0;
     }
   else
     {
       if (exp > 0 || (exp == 0 && tmp >= 0x8000000000000000LL))
 	{
-	  _REENT_ERRNO(rptr) = ERANGE;
+	  rptr->_errno = ERANGE;
 	  return ULONG_LONG_MAX;
 	}
     }
@@ -89,7 +89,7 @@ _strtoufix64_r (struct _reent *rptr,
 	  /* if rounding causes carry, then saturation has occurred */
 	  if (result < tmp)
 	    {
-	      _REENT_ERRNO(rptr) = ERANGE;
+	      rptr->_errno = ERANGE;
 	      return ULONG_LONG_MAX;
 	    }
 	}

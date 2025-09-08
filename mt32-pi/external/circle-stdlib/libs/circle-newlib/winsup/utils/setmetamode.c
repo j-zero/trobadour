@@ -10,17 +10,16 @@ details. */
 
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
 #include <sys/ioctl.h>
 #include <cygwin/kd.h>
 #include <cygwin/version.h>
 
-static void __attribute__ ((__noreturn__))
-usage (FILE *stream)
+static void
+usage (void)
 {
-  fprintf (stream, "Usage: %s [metabit|escprefix]\n"
+  fprintf (stderr, "Usage: %s [metabit|escprefix]\n"
 	   "\n"
 	   "Get or set keyboard meta mode\n"
 	   "\n"
@@ -33,7 +32,6 @@ usage (FILE *stream)
 	   "  -h, --help           This text\n"
 	   "  -V, --version        Print program version and exit\n\n",
 	   program_invocation_short_name);
-  exit (stream == stdout ? 0 : 1);
 }
 
 static void
@@ -89,7 +87,8 @@ main (int ac, char *av[])
     switch (opt)
       {
       case 'h':
-	usage (stdout);
+	usage ();
+	return 0;
       case 'V':
 	print_version ();
 	return 0;
@@ -106,7 +105,10 @@ main (int ac, char *av[])
 	   || !strcmp ("escprefix", av[1]))
     param = 0x04;
   else
-    usage (stderr);
+    {
+      usage ();
+      return 1;
+    }
   if (ioctl (0, KDSKBMETA, param) < 0)
     {
       error ();

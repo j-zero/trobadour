@@ -5,9 +5,11 @@
  *  SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  */
 
-#define MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
-
-#include "mbedtls/build_info.h"
+#if !defined(MBEDTLS_CONFIG_FILE)
+#include "mbedtls/config.h"
+#else
+#include MBEDTLS_CONFIG_FILE
+#endif
 
 #include "mbedtls/platform.h"
 
@@ -50,7 +52,7 @@ struct options {
 } opt;
 
 
-static int read_certificates(const char *const *filenames)
+int read_certificates(const char *const *filenames)
 {
     mbedtls_x509_crt cas;
     int ret = 0;
@@ -86,12 +88,14 @@ int main(int argc, char *argv[])
     struct mbedtls_timing_hr_time timer;
     unsigned long ms;
 
+#if defined(MBEDTLS_USE_PSA_CRYPTO)
     psa_status_t status = psa_crypto_init();
     if (status != PSA_SUCCESS) {
         mbedtls_fprintf(stderr, "Failed to initialize PSA Crypto implementation: %d\n",
                         (int) status);
         goto exit;
     }
+#endif /* MBEDTLS_USE_PSA_CRYPTO */
 
     if (argc <= 1) {
         mbedtls_printf(USAGE);
@@ -157,7 +161,9 @@ int main(int argc, char *argv[])
     exit_code = MBEDTLS_EXIT_SUCCESS;
 
 exit:
+#if defined(MBEDTLS_USE_PSA_CRYPTO)
     mbedtls_psa_crypto_free();
+#endif /* MBEDTLS_USE_PSA_CRYPTO */
     mbedtls_exit(exit_code);
 }
 #endif /* necessary configuration */

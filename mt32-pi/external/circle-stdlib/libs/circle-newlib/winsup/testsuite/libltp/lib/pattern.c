@@ -38,13 +38,12 @@
  */
 
 int
-pattern_check(
-	char *buf,
-	int	buflen,
-	char *pat,
-	int	patlen,
-	int	patshift
-)
+pattern_check(buf, buflen, pat, patlen, patshift)
+char	*buf;
+int	buflen;
+char	*pat;
+int	patlen;
+int	patshift;
 {
     int		nb, ncmp, nleft;
     char	*cp;
@@ -106,13 +105,12 @@ pattern_check(
 }
 
 int
-pattern_fill(
-	char *buf,
-	int	buflen,
-	char *pat,
-	int	patlen,
-	int	patshift
-)
+pattern_fill(buf, buflen, pat, patlen, patshift)
+char	*buf;
+int	buflen;
+char	*pat;
+int	patlen;
+int	patshift;
 {
     int		trans, ncopied, nleft;
     char	*cp;

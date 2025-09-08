@@ -86,12 +86,7 @@ typedef enum {
     LV_VECTOR_GRADIENT_STYLE_RADIAL,
 } lv_vector_gradient_style_t;
 
-typedef enum {
-    LV_VECTOR_FILL_UNITS_OBJECT_BOUNDING_BOX = 0, /** Relative coordinates relative to the object bounding box. */
-    LV_VECTOR_FILL_UNITS_USER_SPACE_ON_USE, /** Absolute coordinates relative to the layer's coordinate system */
-} lv_vector_fill_units_t;
-
-struct _lv_fpoint_t {
+struct lv_fpoint_t {
     float x;
     float y;
 };
@@ -171,19 +166,6 @@ void lv_vector_path_quad_to(lv_vector_path_t * path, const lv_fpoint_t * p1, con
  */
 void lv_vector_path_cubic_to(lv_vector_path_t * path, const lv_fpoint_t * p1, const lv_fpoint_t * p2,
                              const lv_fpoint_t * p3);
-
-/**
- * Add ellipse arc to the path from last point to the point
- * @param path              pointer to a path
- * @param radius_x          the x radius for ellipse arc
- * @param radius_y          the y radius for ellipse arc
- * @param rotate_angle      the rotate angle for arc
- * @param large_arc         true for large arc, otherwise small
- * @param clockwise         true for clockwise, otherwise anticlockwise
- * @param p                 pointer to a `lv_fpoint_t` variable for end point
- */
-void lv_vector_path_arc_to(lv_vector_path_t * path, float radius_x, float radius_y, float rotate_angle, bool large_arc,
-                           bool clockwise, const lv_fpoint_t * p);
 
 /**
  * Close the sub path
@@ -291,15 +273,6 @@ void lv_vector_dsc_set_fill_opa(lv_vector_dsc_t * dsc, lv_opa_t opa);
 void lv_vector_dsc_set_fill_rule(lv_vector_dsc_t * dsc, lv_vector_fill_t rule);
 
 /**
- * Set the fill units for descriptor.
- * @param dsc              pointer to a vector graphic descriptor
- * @param units            the units to be set in lv_vector_fill_units_t format
- * @note The units can be either relative to the object bounding box or absolute in user space.
- *       This API specifically affects the drawing position of the fill image and does not impact other elements.
- */
-void lv_vector_dsc_set_fill_units(lv_vector_dsc_t * dsc, const lv_vector_fill_units_t units);
-
-/**
  * Set fill image for descriptor
  * @param dsc              pointer to a vector graphic descriptor
  * @param img_dsc          pointer to a `lv_draw_image_dsc_t` variable
@@ -336,10 +309,10 @@ void lv_vector_dsc_set_fill_gradient_spread(lv_vector_dsc_t * dsc, lv_vector_gra
 /**
  * Set fill gradient color stops for descriptor
  * @param dsc              pointer to a vector graphic descriptor
- * @param stops            an array of `lv_grad_stop_t` variables
+ * @param stops            an array of `lv_gradient_stop_t` variables
  * @param count            the number of stops in the array, range: 0..LV_GRADIENT_MAX_STOPS
  */
-void lv_vector_dsc_set_fill_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_grad_stop_t * stops,
+void lv_vector_dsc_set_fill_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_gradient_stop_t * stops,
                                                  uint16_t count);
 
 /**
@@ -434,10 +407,10 @@ void lv_vector_dsc_set_stroke_gradient_spread(lv_vector_dsc_t * dsc, lv_vector_g
 /**
  * Set stroke color stops for descriptor
  * @param dsc              pointer to a vector graphic descriptor
- * @param stops            an array of `lv_grad_stop_t` variables
+ * @param stops            an array of `lv_gradient_stop_t` variables
  * @param count            the number of stops in the array
  */
-void lv_vector_dsc_set_stroke_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_grad_stop_t * stops,
+void lv_vector_dsc_set_stroke_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_gradient_stop_t * stops,
                                                    uint16_t count);
 
 /**

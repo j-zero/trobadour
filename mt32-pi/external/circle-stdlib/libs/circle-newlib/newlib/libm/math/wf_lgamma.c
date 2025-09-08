@@ -32,10 +32,16 @@
         y = __ieee754_lgammaf_r(x,&(_REENT_SIGNGAM(_REENT)));
         if(_LIB_VERSION == _IEEE_) return y;
         if(!finitef(y)&&finitef(x)) {
-	    /* lgammaf(finite) overflow */
-	    errno = ERANGE;
-        }
-	return y;
+	    if(floorf(x)==x&&x<=0.0f) {
+		/* lgammaf(-integer) */
+		errno = EDOM;
+	    } else {
+		/* lgammaf(finite) overflow */
+		errno = ERANGE;
+	    }
+            return HUGE_VALF;
+        } else
+            return y;
 #endif
 }             
 

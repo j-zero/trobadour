@@ -13,8 +13,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA
  */
 
 #include "fluid_synth.h"
@@ -238,7 +239,7 @@ void fluid_synth_settings(fluid_settings_t *settings)
 
     fluid_settings_register_int(settings, "synth.min-note-length", 10, 0, 65535, 0);
 
-    fluid_settings_register_int(settings, "synth.threadsafe-api", FLUID_THREAD_SAFE_CAPABLE, 0, 1, FLUID_HINT_TOGGLED);
+    fluid_settings_register_int(settings, "synth.threadsafe-api", 1, 0, 1, FLUID_HINT_TOGGLED);
 
     fluid_settings_register_num(settings, "synth.overflow.percussion", 4000, -10000, 10000, 0);
     fluid_settings_register_num(settings, "synth.overflow.sustained", -1000, -10000, 10000, 0);
@@ -1886,44 +1887,6 @@ fluid_synth_cc_LOCAL(fluid_synth_t *synth, int channum, int num)
                     else
                     {
                         FLUID_LOG(FLUID_INFO, "Ignoring unknown AWE32 NRPN targeting effect %d", gen);
-                    }
-                }
-            }
-            else if(fluid_channel_get_cc(chan, NRPN_MSB) == 1 && synth->bank_select == FLUID_BANK_STYLE_GS)
-            {
-                int nrpn2cc = -1;
-                int nrpn_lsb = fluid_channel_get_cc(chan, NRPN_LSB);
-                // cf. SC8850 owner's manual pages 227 + 228
-                switch(nrpn_lsb)
-                {
-                case 8:
-                    // vibrato rate
-                    nrpn2cc = SOUND_CTRL7;
-                    break;
-                case 9:
-                    // vibrato depth
-                    nrpn2cc = SOUND_CTRL8;
-                    break;
-                case 10:
-                    // vibrato rate
-                    nrpn2cc = SOUND_CTRL9;
-                    break;
-                default:
-                    break;
-                }
-                if(nrpn2cc != -1)
-                {
-                    if(synth->verbose)
-                    {
-                        FLUID_LOG(FLUID_INFO, "Translating Roland GS NRPN %d to CC %d", nrpn_lsb, nrpn2cc);
-                    }
-                    fluid_synth_cc(synth, channum, nrpn2cc, msb_value);
-                }
-                else
-                {
-                    if(synth->verbose)
-                    {
-                        FLUID_LOG(FLUID_INFO, "Ignoring unknown Roland GS NRPN %d", nrpn_lsb);
                     }
                 }
             }
@@ -5298,15 +5261,7 @@ fluid_synth_alloc_voice_LOCAL(fluid_synth_t *synth, fluid_sample_t *sample, int 
     */
     {
         int mono = fluid_channel_is_playing_mono(channel);
-        fluid_mod_t *default_mod;
-        if (sample->default_modulators != NULL)
-        {
-            default_mod = sample->default_modulators;
-        }
-        else
-        {
-            default_mod = synth->default_mod;
-        }
+        fluid_mod_t *default_mod = synth->default_mod;
 
         while(default_mod != NULL)
         {
@@ -5430,14 +5385,10 @@ fluid_synth_add_sfloader(fluid_synth_t *synth, fluid_sfloader_t *loader)
 }
 
 /**
- * Load a SoundFont file.
- *
- * The @p filename is passed onto and interpreted by the SoundFont loaders.
- * On success, the newly loaded SoundFont will be put on top of the SoundFont
+ * Load a SoundFont file (filename is interpreted by SoundFont loaders).
+ * The newly loaded SoundFont will be put on top of the SoundFont
  * stack. Presets are searched starting from the SoundFont on the
  * top of the stack, working the way down the stack until a preset is found.
- *
- * If the SoundFont is structural defect, it will be rejected and the function will fail.
  *
  * @param synth FluidSynth instance
  * @param filename File to load
@@ -7843,7 +7794,7 @@ static void fluid_synth_process_awe32_nrpn_LOCAL(fluid_synth_t *synth, int chan,
         case GEN_REVERBSEND:
             fluid_clip(data, 0, 255);
             /* transform the input value */
-            converted_sf2_generator_value = fluid_mod_transform_source_value(NULL, data, default_reverb_mod.flags1, 256, TRUE);
+            converted_sf2_generator_value = fluid_mod_transform_source_value(data, default_reverb_mod.flags1, 256);
             FLUID_LOG(FLUID_DBG, "AWE32 Reverb: %f", converted_sf2_generator_value);
             converted_sf2_generator_value*= fluid_mod_get_amount(&default_reverb_mod);
             break;
@@ -7851,7 +7802,7 @@ static void fluid_synth_process_awe32_nrpn_LOCAL(fluid_synth_t *synth, int chan,
         case GEN_CHORUSSEND:
             fluid_clip(data, 0, 255);
             /* transform the input value */
-            converted_sf2_generator_value = fluid_mod_transform_source_value(NULL, data, default_chorus_mod.flags1, 256, TRUE);
+            converted_sf2_generator_value = fluid_mod_transform_source_value(data, default_chorus_mod.flags1, 256);
             FLUID_LOG(FLUID_DBG, "AWE32 Chorus: %f", converted_sf2_generator_value);
             converted_sf2_generator_value*= fluid_mod_get_amount(&default_chorus_mod);
             break;

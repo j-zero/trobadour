@@ -32,7 +32,6 @@
 */
 
 #include <fenv.h>
-#include "riscv_math.h"
 
 /* This implementation is intended to comply with the following
  * specification:
@@ -50,7 +49,7 @@
 int feholdexcept(fenv_t *envp)
 {
 
-#ifdef __RISCV_HARD_FLOAT
+#if __riscv_flen
 
   /* Store the current FP environment in envp*/
 

@@ -1,9 +1,15 @@
 /*
  * EAP peer method: EAP-MD5 (RFC 3748 and RFC 1994)
- * Copyright (c) 2004-2012, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2004-2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -39,7 +45,7 @@ static struct wpabuf * eap_md5_process(struct eap_sm *sm, void *priv,
 	if (password == NULL) {
 		wpa_printf(MSG_INFO, "EAP-MD5: Password not configured");
 		eap_sm_request_password(sm);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
@@ -47,7 +53,7 @@ static struct wpabuf * eap_md5_process(struct eap_sm *sm, void *priv,
 	if (pos == NULL || len == 0) {
 		wpa_printf(MSG_INFO, "EAP-MD5: Invalid frame (pos=%p len=%lu)",
 			   pos, (unsigned long) len);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
 
@@ -60,18 +66,18 @@ static struct wpabuf * eap_md5_process(struct eap_sm *sm, void *priv,
 		wpa_printf(MSG_INFO, "EAP-MD5: Invalid challenge "
 			   "(challenge_len=%lu len=%lu)",
 			   (unsigned long) challenge_len, (unsigned long) len);
-		ret->ignore = true;
+		ret->ignore = TRUE;
 		return NULL;
 	}
-	ret->ignore = false;
+	ret->ignore = FALSE;
 	challenge = pos;
 	wpa_hexdump(MSG_MSGDUMP, "EAP-MD5: Challenge",
 		    challenge, challenge_len);
 
 	wpa_printf(MSG_DEBUG, "EAP-MD5: Generating Challenge Response");
 	ret->methodState = METHOD_DONE;
-	ret->decision = DECISION_COND_SUCC;
-	ret->allowNotifications = true;
+	ret->decision = DECISION_UNCOND_SUCC;
+	ret->allowNotifications = TRUE;
 
 	resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_MD5, 1 + CHAP_MD5_LEN,
 			     EAP_CODE_RESPONSE, eap_get_id(reqData));
@@ -86,13 +92,7 @@ static struct wpabuf * eap_md5_process(struct eap_sm *sm, void *priv,
 
 	id = eap_get_id(resp);
 	rpos = wpabuf_put(resp, CHAP_MD5_LEN);
-	if (chap_md5(id, password, password_len, challenge, challenge_len,
-		     rpos)) {
-		wpa_printf(MSG_INFO, "EAP-MD5: CHAP MD5 operation failed");
-		ret->ignore = true;
-		wpabuf_free(resp);
-		return NULL;
-	}
+	chap_md5(id, password, password_len, challenge, challenge_len, rpos);
 	wpa_hexdump(MSG_MSGDUMP, "EAP-MD5: Response", rpos, CHAP_MD5_LEN);
 
 	return resp;
@@ -102,6 +102,7 @@ static struct wpabuf * eap_md5_process(struct eap_sm *sm, void *priv,
 int eap_peer_md5_register(void)
 {
 	struct eap_method *eap;
+	int ret;
 
 	eap = eap_peer_method_alloc(EAP_PEER_METHOD_INTERFACE_VERSION,
 				    EAP_VENDOR_IETF, EAP_TYPE_MD5, "MD5");
@@ -112,5 +113,8 @@ int eap_peer_md5_register(void)
 	eap->deinit = eap_md5_deinit;
 	eap->process = eap_md5_process;
 
-	return eap_peer_method_register(eap);
+	ret = eap_peer_method_register(eap);
+	if (ret)
+		eap_peer_method_free(eap);
+	return ret;
 }

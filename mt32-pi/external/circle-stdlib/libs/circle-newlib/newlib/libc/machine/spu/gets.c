@@ -40,6 +40,8 @@ char *
 gets (buf)
      char *buf;
 {
+  CHECK_STD_INIT(_REENT);
+
   /* The return value gets written over buf
    */
   return (char*) __send_to_ppe(SPE_C99_SIGNALCODE, SPE_C99_GETS, &buf);

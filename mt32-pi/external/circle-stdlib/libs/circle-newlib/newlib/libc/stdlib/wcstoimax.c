@@ -122,10 +122,10 @@ _wcstoimax_l(struct _reent *rptr, const wchar_t * __restrict nptr,
 	}
 	if (any < 0) {
 		acc = neg ? INTMAX_MIN : INTMAX_MAX;
-		_REENT_ERRNO(rptr) = ERANGE;
+		rptr->_errno = ERANGE;
 	} else if (!any) {
 noconv:
-		_REENT_ERRNO(rptr) = EINVAL;
+		rptr->_errno = EINVAL;
 	} else if (neg)
 		acc = -acc;
 	if (endptr != NULL)

@@ -27,8 +27,9 @@ char *heap_ptr;
  *         RAM. We just increment a pointer in what's
  *         left of memory on the board.
  */
-void *
-sbrk (ptrdiff_t nbytes)
+char *
+sbrk (nbytes)
+     int nbytes;
 {
   char        *base;
 

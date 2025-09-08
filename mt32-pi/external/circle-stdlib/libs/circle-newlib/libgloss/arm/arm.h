@@ -29,7 +29,7 @@
 #ifndef _LIBGLOSS_ARM_H
 #define _LIBGLOSS_ARM_H
 
-#include "arm-acle-compat.h"
+#include "acle-compat.h"
 
 /* Checking for targets supporting only Thumb instructions (eg. ARMv6-M) or
    supporting Thumb-2 instructions, whether ARM instructions are available or

@@ -16,7 +16,6 @@ details. */
 #include <sys/cygwin.h>
 #include <cygwin/version.h>
 #include <windows.h>
-#define PSAPI_VERSION 1
 #include <psapi.h>
 
 struct option longopts[] =

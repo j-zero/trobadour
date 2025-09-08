@@ -28,13 +28,13 @@
 #include <sys/cdefs.h>
 
 #include "namespace.h"
-#include "rune.h"
+#include <rune.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include "sysexits.h"
+#include <sysexits.h>
 #include "un-namespace.h"
 
 #include "collate.h"
@@ -58,9 +58,8 @@ struct __collate_st_chain_pri __collate_chain_pri_table[TABLE_SIZE];
 void __collate_err(int ex, const char *f);
 
 int
-__collate_load_tables(
-	char *encoding
-)
+__collate_load_tables(encoding)
+	char *encoding;
 {
 	char buf[PATH_MAX];
 	FILE *fp;
@@ -114,9 +113,8 @@ __collate_load_tables(
 }
 
 u_char *
-__collate_substitute(
-	const u_char *s
-)
+__collate_substitute(s)
+	const u_char *s;
 {
 	int dest_len, len, nlen;
 	int delta = strlen((const char *) s);
@@ -145,12 +143,9 @@ __collate_substitute(
 }
 
 void
-__collate_lookup(
-	const u_char *t,
-	int *len,
-	int *prim,
-	int *sec
-)
+__collate_lookup(t, len, prim, sec)
+	const u_char *t;
+	int *len, *prim, *sec;
 {
 	struct __collate_st_chain_pri *p2;
 
@@ -170,7 +165,8 @@ __collate_lookup(
 }
 
 u_char *
-__collate_strdup(u_char *s)
+__collate_strdup(s)
+	u_char *s;
 {
 	u_char *t = (u_char *) strdup((const char *) s);
 

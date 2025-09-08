@@ -30,10 +30,9 @@
 
 #include <sys/types.h>
 #include <sys/errno.h>
-#include "arc-symbols.h"
 
-extern char START_HEAP;
-extern char END_HEAP;
+extern char __start_heap;
+extern char __end_heap;
 
 caddr_t
 _sbrk (size_t nbytes)
@@ -43,7 +42,7 @@ _sbrk (size_t nbytes)
 
   if (heap_ptr == NULL)
     {
-      heap_ptr = &START_HEAP;
+      heap_ptr = &__start_heap;
     }
 
   /* Align the 'heap_ptr' so that memory will always be allocated at word
@@ -51,7 +50,7 @@ _sbrk (size_t nbytes)
   heap_ptr = (char *) ((((unsigned long) heap_ptr) + 7) & ~7);
   prev_heap_ptr = heap_ptr;
 
-  if ((heap_ptr + nbytes) < &END_HEAP)
+  if ((heap_ptr + nbytes) < &__end_heap)
     {
       heap_ptr += nbytes;
       return (caddr_t) prev_heap_ptr;

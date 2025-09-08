@@ -2,14 +2,20 @@
  * wpa_supplicant/hostapd - State machine definitions
  * Copyright (c) 2002-2005, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  *
  * This file includes a set of pre-processor macros that can be used to
  * implement a state machine. In addition to including this header file, each
  * file implementing a state machine must define STATE_MACHINE_DATA to be the
  * data structure including state variables (enum machine_state,
- * bool changed), and STATE_MACHINE_DEBUG_PREFIX to be a string that is used
+ * Boolean changed), and STATE_MACHINE_DEBUG_PREFIX to be a string that is used
  * as a prefix for all debug messages. If SM_ENTRY_MA macro is used to define
  * a group of state machines with shared data structure, STATE_MACHINE_ADDR
  * needs to be defined to point to the MAC address used in debug output.
@@ -45,7 +51,7 @@ static void sm_ ## machine ## _ ## state ## _Enter(STATE_MACHINE_DATA *sm, \
  */
 #define SM_ENTRY(machine, state) \
 if (!global || sm->machine ## _state != machine ## _ ## state) { \
-	sm->changed = true; \
+	sm->changed = TRUE; \
 	wpa_printf(MSG_DEBUG, STATE_MACHINE_DEBUG_PREFIX ": " #machine \
 		   " entering state " #state); \
 } \
@@ -64,7 +70,7 @@ sm->machine ## _state = machine ## _ ## state;
  */
 #define SM_ENTRY_M(machine, _state, data) \
 if (!global || sm->data ## _ ## state != machine ## _ ## _state) { \
-	sm->changed = true; \
+	sm->changed = TRUE; \
 	wpa_printf(MSG_DEBUG, STATE_MACHINE_DEBUG_PREFIX ": " \
 		   #machine " entering state " #_state); \
 } \
@@ -82,7 +88,7 @@ sm->data ## _ ## state = machine ## _ ## _state;
  */
 #define SM_ENTRY_MA(machine, _state, data) \
 if (!global || sm->data ## _ ## state != machine ## _ ## _state) { \
-	sm->changed = true; \
+	sm->changed = TRUE; \
 	wpa_printf(MSG_DEBUG, STATE_MACHINE_DEBUG_PREFIX ": " MACSTR " " \
 		   #machine " entering state " #_state, \
 		   MAC2STR(STATE_MACHINE_ADDR)); \

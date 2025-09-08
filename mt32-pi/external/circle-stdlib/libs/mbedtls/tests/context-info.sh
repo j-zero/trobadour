@@ -19,7 +19,7 @@ fi
 THIS_SCRIPT_NAME=$(basename "$0")
 PROG_PATH="../programs/ssl/ssl_context_info"
 OUT_FILE="ssl_context_info.log"
-IN_DIR="../framework/data_files/base64"
+IN_DIR="data_files/base64"
 
 USE_VALGRIND=0
 
@@ -198,14 +198,16 @@ run_test "Default configuration, server" \
          -u "MBEDTLS_HAVE_TIME$" \
          -u "MBEDTLS_X509_CRT_PARSE_C$" \
          -u "MBEDTLS_SSL_MAX_FRAGMENT_LENGTH$" \
+         -u "MBEDTLS_SSL_TRUNCATED_HMAC$" \
          -u "MBEDTLS_SSL_ENCRYPT_THEN_MAC$" \
          -u "MBEDTLS_SSL_SESSION_TICKETS$" \
          -u "MBEDTLS_SSL_SESSION_TICKETS and client$" \
+         -u "MBEDTLS_SSL_DTLS_BADMAC_LIMIT$" \
          -u "MBEDTLS_SSL_DTLS_ANTI_REPLAY$" \
          -u "MBEDTLS_SSL_ALPN$" \
          -u "ciphersuite.* TLS-ECDHE-RSA-WITH-CHACHA20-POLY1305-SHA256$" \
          -u "cipher flags.* 0x00$" \
-         -u "Message-Digest.* 9$" \
+         -u "Message-Digest.* SHA256$" \
          -u "compression.* disabled$" \
          -u "DTLS datagram packing.* enabled$" \
          -n "Certificate" \
@@ -220,14 +222,16 @@ run_test "Default configuration, client" \
          -u "MBEDTLS_HAVE_TIME$" \
          -u "MBEDTLS_X509_CRT_PARSE_C$" \
          -u "MBEDTLS_SSL_MAX_FRAGMENT_LENGTH$" \
+         -u "MBEDTLS_SSL_TRUNCATED_HMAC$" \
          -u "MBEDTLS_SSL_ENCRYPT_THEN_MAC$" \
          -u "MBEDTLS_SSL_SESSION_TICKETS$" \
          -u "MBEDTLS_SSL_SESSION_TICKETS and client$" \
+         -u "MBEDTLS_SSL_DTLS_BADMAC_LIMIT$" \
          -u "MBEDTLS_SSL_DTLS_ANTI_REPLAY$" \
          -u "MBEDTLS_SSL_ALPN$" \
          -u "ciphersuite.* TLS-ECDHE-RSA-WITH-CHACHA20-POLY1305-SHA256$" \
          -u "cipher flags.* 0x00$" \
-         -u "Message-Digest.* 9$" \
+         -u "Message-Digest.* SHA256$" \
          -u "compression.* disabled$" \
          -u "DTLS datagram packing.* enabled$" \
          -u "cert. version .* 3$" \
@@ -240,6 +244,16 @@ run_test "Default configuration, client" \
          -u "RSA key size.* 2048 bits$" \
          -u "basic constraints.* CA=false$" \
          -n "bytes left to analyze from context"
+
+run_test "Ciphersuite TLS-RSA-WITH-AES-256-CCM-8, server" \
+         "srv_ciphersuite.txt" \
+         -n "ERROR" \
+         -u "ciphersuite.* TLS-RSA-WITH-AES-256-CCM-8$" \
+
+run_test "Ciphersuite TLS-RSA-WITH-AES-256-CCM-8, client" \
+         "cli_ciphersuite.txt" \
+         -n "ERROR" \
+         -u "ciphersuite.* TLS-RSA-WITH-AES-256-CCM-8$" \
 
 run_test "No packing, server" \
          "srv_no_packing.txt" \
@@ -315,9 +329,11 @@ run_test "Minimal configuration, server" \
          "srv_min_cfg.txt" \
          -n "ERROR" \
          -n "MBEDTLS_SSL_MAX_FRAGMENT_LENGTH$" \
+         -n "MBEDTLS_SSL_TRUNCATED_HMAC$" \
          -n "MBEDTLS_SSL_ENCRYPT_THEN_MAC$" \
          -n "MBEDTLS_SSL_SESSION_TICKETS$" \
          -n "MBEDTLS_SSL_SESSION_TICKETS and client$" \
+         -n "MBEDTLS_SSL_DTLS_BADMAC_LIMIT$" \
          -n "MBEDTLS_SSL_DTLS_ANTI_REPLAY$" \
          -n "MBEDTLS_SSL_ALPN$" \
 
@@ -325,9 +341,11 @@ run_test "Minimal configuration, client" \
          "cli_min_cfg.txt" \
          -n "ERROR" \
          -n "MBEDTLS_SSL_MAX_FRAGMENT_LENGTH$" \
+         -n "MBEDTLS_SSL_TRUNCATED_HMAC$" \
          -n "MBEDTLS_SSL_ENCRYPT_THEN_MAC$" \
          -n "MBEDTLS_SSL_SESSION_TICKETS$" \
          -n "MBEDTLS_SSL_SESSION_TICKETS and client$" \
+         -n "MBEDTLS_SSL_DTLS_BADMAC_LIMIT$" \
          -n "MBEDTLS_SSL_DTLS_ANTI_REPLAY$" \
          -n "MBEDTLS_SSL_ALPN$" \
 
@@ -348,7 +366,7 @@ run_test "Older version (v2.19.1)" \
          -u "minor.* 19$" \
          -u "path.* 1$" \
          -u "ciphersuite.* TLS-ECDHE-ECDSA-WITH-AES-128-CCM-8$" \
-         -u "Message-Digest.* 9$" \
+         -u "Message-Digest.* SHA256$" \
          -u "compression.* disabled$" \
          -u "serial number.* 01:70:AF:40:B4:E6$" \
          -u "issuer name.* CN=ca$" \
@@ -391,7 +409,7 @@ run_test "Empty file as input" \
          -u "Finished. No valid base64 code found"
 
 run_test "Not empty file without base64 code" \
-         "../../../tests/context-info.sh" \
+         "../../context-info.sh" \
          -n "Deserializing"
 
 run_test "Binary file instead of text file" \

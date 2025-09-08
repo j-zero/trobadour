@@ -2,7 +2,7 @@
 
 SPDX-License-Identifier: BSD-3-Clause
 
-Copyright (C) 2009-2025, Ben Hoyt
+Copyright (C) 2009-2020, Ben Hoyt
 
 inih is released under the New BSD license (see LICENSE.txt). Go to the project
 home page for more info:
@@ -44,12 +44,12 @@ typedef struct {
     size_t num_left;
 } ini_parse_string_ctx;
 
-/* Strip whitespace chars off end of given string, in place. end must be a
-   pointer to the NUL terminator at the end of the string. Return s. */
-static char* ini_rstrip(char* s, char* end)
+/* Strip whitespace chars off end of given string, in place. Return s. */
+static char* ini_rstrip(char* s)
 {
-    while (end > s && isspace((unsigned char)(*--end)))
-        *end = '\0';
+    char* p = s + strlen(s);
+    while (p > s && isspace((unsigned char)(*--p)))
+        *p = '\0';
     return s;
 }
 
@@ -140,8 +140,7 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
         offset = strlen(line);
 
 #if INI_ALLOW_REALLOC && !INI_USE_STACK
-        while (max_line < INI_MAX_LINE &&
-               offset == max_line - 1 && line[offset - 1] != '\n') {
+        while (offset == max_line - 1 && line[offset - 1] != '\n') {
             max_line *= 2;
             if (max_line > INI_MAX_LINE)
                 max_line = INI_MAX_LINE;
@@ -154,6 +153,8 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
             if (reader(line + offset, (int)(max_line - offset), stream) == NULL)
                 break;
             offset += strlen(line + offset);
+            if (max_line >= INI_MAX_LINE)
+                break;
         }
 #endif
 
@@ -177,7 +178,7 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
             start += 3;
         }
 #endif
-        start = ini_rstrip(ini_lskip(start), line + offset);
+        start = ini_rstrip(ini_lskip(start));
 
         if (strchr(INI_START_COMMENT_PREFIXES, *start)) {
             /* Start-of-line comment */
@@ -186,8 +187,9 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
         else if (*prev_name && *start && start > line) {
 #if INI_ALLOW_INLINE_COMMENTS
             end = ini_find_chars_or_comment(start, NULL);
-            *end = '\0';
-            ini_rstrip(start, end);
+            if (*end)
+                *end = '\0';
+            ini_rstrip(start);
 #endif
             /* Non-blank line with leading whitespace, treat as continuation
                of previous name's value (as per Python configparser). */
@@ -219,14 +221,15 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
             end = ini_find_chars_or_comment(start, "=:");
             if (*end == '=' || *end == ':') {
                 *end = '\0';
-                name = ini_rstrip(start, end);
+                name = ini_rstrip(start);
                 value = end + 1;
 #if INI_ALLOW_INLINE_COMMENTS
                 end = ini_find_chars_or_comment(value, NULL);
-                *end = '\0';
+                if (*end)
+                    *end = '\0';
 #endif
                 value = ini_lskip(value);
-                ini_rstrip(value, end);
+                ini_rstrip(value);
 
 #if INI_ALLOW_MULTILINE
                 ini_strncpy0(prev_name, name, sizeof(prev_name));
@@ -235,16 +238,15 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
                 if (!HANDLER(user, section, name, value) && !error)
                     error = lineno;
             }
-            else {
+            else if (!error) {
                 /* No '=' or ':' found on name[=:]value line */
 #if INI_ALLOW_NO_VALUE
                 *end = '\0';
-                name = ini_rstrip(start, end);
+                name = ini_rstrip(start);
                 if (!HANDLER(user, section, name, NULL) && !error)
                     error = lineno;
 #else
-                if (!error)
-                    error = lineno;
+                error = lineno;
 #endif
             }
         }
@@ -311,16 +313,10 @@ static char* ini_reader_string(char* str, int num, void* stream) {
 
 /* See documentation in header file. */
 int ini_parse_string(const char* string, ini_handler handler, void* user) {
-    return ini_parse_string_length(string, strlen(string), handler, user);
-}
-
-/* See documentation in header file. */
-int ini_parse_string_length(const char* string, size_t length,
-                            ini_handler handler, void* user) {
     ini_parse_string_ctx ctx;
 
     ctx.ptr = string;
-    ctx.num_left = length;
+    ctx.num_left = strlen(string);
     return ini_parse_stream((ini_reader)ini_reader_string, &ctx, handler,
                             user);
 }

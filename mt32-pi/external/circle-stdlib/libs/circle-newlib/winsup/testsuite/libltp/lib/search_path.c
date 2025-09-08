@@ -50,9 +50,6 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 
-#pragma GCC diagnostic ignored "-Wformat-overflow"
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-
 extern int errno;
 
 struct stat stbuf;
@@ -103,12 +100,11 @@ char **argv;
 /*
  */
 int
-search_path(
-	const char *cmd,	/* The requested filename */
-	char *res_path,		/* The resulting path or error mesg */
-	int access_mode,	/* the mode used by access(2) */
-	int fullpath		/* if set, cwd will be prepended to all non-full paths */
-)
+search_path(cmd, res_path, access_mode, fullpath)
+const char *cmd;	/* The requested filename */
+char *res_path; /* The resulting path or error mesg */
+int access_mode; /* the mode used by access(2) */
+int fullpath;	/* if set, cwd will be prepended to all non-full paths */
 {
     char *cp;   /* used to scan PATH for directories */
     int ret;      /* return value from access */
@@ -225,7 +221,7 @@ printf("search_path: res_path = '%s'\n", res_path);
 		toolong++;
 	        continue;
             }
-            snprintf(tmppath, sizeof tmppath, "%s/%s", curpath, res_path);
+            sprintf(tmppath, "%s/%s", curpath, res_path);
 	    strcpy(res_path, tmppath);
 #if DEBUG
 printf("search_path: full res_path= '%s'\n", res_path);

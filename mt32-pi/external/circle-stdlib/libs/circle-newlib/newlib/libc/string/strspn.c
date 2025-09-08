@@ -41,11 +41,10 @@ strspn (const char *s1,
       for (c = s2; *c; c++)
 	{
 	  if (*s1 == *c)
-	    goto found;
+	    break;
 	}
       if (*c == '\0')
 	break;
-found:
       s1++;
     }
 

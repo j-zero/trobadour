@@ -10,7 +10,6 @@
 #include <errno.h>
 #include "warning.h"
 
-#include "circle_macros.h"
 #include <circle/timer.h>
 
 extern "C"

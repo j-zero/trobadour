@@ -1,22 +1,41 @@
-MBEDTLS_TEST_PATH:=../../tests
+MBEDTLS_TEST_PATH:=../../tests/src
+MBEDTLS_TEST_OBJS:=$(patsubst %.c,%.o,$(wildcard ${MBEDTLS_TEST_PATH}/*.c ${MBEDTLS_TEST_PATH}/drivers/*.c))
 
-MBEDTLS_PATH := ../..
-include ../../scripts/common.make
+CFLAGS ?= -O2
+WARNING_CFLAGS ?= -Wall -Wextra
+LOCAL_CFLAGS = $(WARNING_CFLAGS) -I../../tests/include -I../../include -D_FILE_OFFSET_BITS=64
+LOCAL_LDFLAGS = ${MBEDTLS_TEST_OBJS}		\
+		-L../../library			\
+		-lmbedtls$(SHARED_SUFFIX)	\
+		-lmbedx509$(SHARED_SUFFIX)	\
+		-lmbedcrypto$(SHARED_SUFFIX)
 
-PROGRAM_FUZZ_PATH:=$(MBEDTLS_PATH)/tf-psa-crypto/programs/fuzz
+LOCAL_CFLAGS += $(patsubst -I../%,-I../../%,$(THIRDPARTY_INCLUDES))
 
-DEP=${MBEDLIBS}
+ifndef SHARED
+DEP=../../library/libmbedcrypto.a ../../library/libmbedx509.a ../../library/libmbedtls.a
+else
+DEP=../../library/libmbedcrypto.$(DLEXT) ../../library/libmbedx509.$(DLEXT) ../../library/libmbedtls.$(DLEXT)
+endif
+
+
+DLEXT ?= so
+EXEXT=
+SHARED_SUFFIX=
+
+# Zlib shared library extensions:
+ifdef ZLIB
+LOCAL_LDFLAGS += -lz
+endif
 
 ifdef FUZZINGENGINE
 LOCAL_LDFLAGS += -lFuzzingEngine
 endif
 
-LOCAL_CFLAGS += -I$(PROGRAM_FUZZ_PATH)
-
-# A test application is built for each fuzz_*.c file.
+# A test application is built for each suites/test_suite_*.data file.
+# Application name is same as .data file's base name and can be
+# constructed by stripping path 'suites/' and extension .data.
 APPS = $(basename $(wildcard fuzz_*.c))
-APPS += $(basename $(PROGRAM_FUZZ_PATH)/fuzz_privkey.c)
-APPS += $(basename $(PROGRAM_FUZZ_PATH)/fuzz_pubkey.c)
 
 # Construct executable name by adding OS specific suffix $(EXEXT).
 BINARIES := $(addsuffix $(EXEXT),$(APPS))
@@ -27,6 +46,9 @@ BINARIES := $(addsuffix $(EXEXT),$(APPS))
 
 all: $(BINARIES)
 
+$(DEP):
+	$(MAKE) -C ../../library
+
 C_FILES := $(addsuffix .c,$(APPS))
 
 %.o: %.c
@@ -34,21 +56,19 @@ C_FILES := $(addsuffix .c,$(APPS))
 
 
 ifdef FUZZINGENGINE
-$(BINARIES): %$(EXEXT): %.o $(PROGRAM_FUZZ_PATH)/fuzz_common.o $(DEP)
-	echo " $(CC) $(PROGRAM_FUZZ_PATH)/fuzz_common.o $< $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@"
-	$(CXX) $(PROGRAM_FUZZ_PATH)/fuzz_common.o $<	$(LOCAL_LDFLAGS) $(LDFLAGS) -o $@
+$(BINARIES): %$(EXEXT): %.o common.o $(DEP)
+	echo " $(CC) common.o $< $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@"
+	$(CXX) common.o $<	$(LOCAL_LDFLAGS) $(LDFLAGS) -o $@
 else
-$(BINARIES): %$(EXEXT): %.o $(PROGRAM_FUZZ_PATH)/fuzz_common.o $(PROGRAM_FUZZ_PATH)/fuzz_onefile.o $(DEP)
-	echo " $(CC) $(PROGRAM_FUZZ_PATH)/fuzz_common.o $(PROGRAM_FUZZ_PATH)/fuzz_onefile.o $< $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@"
-	$(CC) $(PROGRAM_FUZZ_PATH)/fuzz_common.o $(PROGRAM_FUZZ_PATH)/fuzz_onefile.o $<	$(LOCAL_LDFLAGS) $(LDFLAGS) -o $@
+$(BINARIES): %$(EXEXT): %.o common.o onefile.o $(DEP)
+	echo " $(CC) common.o onefile.o $< $(LOCAL_LDFLAGS) $(LDFLAGS) -o $@"
+	$(CC) common.o onefile.o $<	$(LOCAL_LDFLAGS) $(LDFLAGS) -o $@
 endif
 
 clean:
 ifndef WINDOWS
 	rm -rf $(BINARIES) *.o
-	rm -rf $(MBEDTLS_PATH)/tf-psa-crypto/programs/fuzz/*.o
 else
 	if exist *.o del /Q /F *.o
 	if exist *.exe del /Q /F *.exe
-	if exist $(MBEDTLS_PATH)\tf-psa-crypto\programs\fuzz\*.o del /Q /F $(MBEDTLS_PATH)\tf-psa-crypto\programs\fuzz\*.o
 endif

@@ -117,13 +117,11 @@ main(int ac, char **av)
 		 * Call mmap to map the temporary file 'TEMPFILE'
 	 	 * which is already closed. so, fildes is not valid.
 		 */
-		errno = 0;
-		addr = mmap(0, page_sz, PROT_WRITE,
-			    MAP_FILE|MAP_SHARED, fildes, 0);
-		TEST_ERRNO = errno;
+		TEST(mmap(0, page_sz, PROT_WRITE,
+			    MAP_FILE|MAP_SHARED, fildes, 0));
 
 		/* Check for the return value of mmap() */
-		if (addr != MAP_FAILED) {
+		if (TEST_RETURN != (int)MAP_FAILED) {
 			tst_resm(TFAIL, "mmap() returned invalid value, "
 				 "expected: -1");
 			/* Unmap the mapped memory */

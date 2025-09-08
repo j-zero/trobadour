@@ -6,10 +6,6 @@
 #include <errno.h>
 #include "local.h"
 
-#ifdef _REENT_THREAD_LOCAL
-_Thread_local _mbstate_t _tls_wcrtomb_state;
-#endif
-
 size_t
 _wcrtomb_r (struct _reent *ptr,
 	char *s,
@@ -35,7 +31,7 @@ _wcrtomb_r (struct _reent *ptr,
   if (retval == -1)
     {
       ps->__count = 0;
-      _REENT_ERRNO(ptr) = EILSEQ;
+      ptr->_errno = EILSEQ;
       return (size_t)(-1);
     }
   else
@@ -71,7 +67,7 @@ wcrtomb (char *__restrict s,
   if (retval == -1)
     {
       ps->__count = 0;
-      _REENT_ERRNO(reent) = EILSEQ;
+      reent->_errno = EILSEQ;
       return (size_t)(-1);
     }
   else

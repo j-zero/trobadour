@@ -13,8 +13,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA
  */
 
 #include "fluid_cmd.h"
@@ -4878,7 +4879,6 @@ void fluid_client_quit(fluid_client_t *client)
     FLUID_LOG(FLUID_DBG, "fluid_client_quit: joining");
     fluid_thread_join(client->thread);
     FLUID_LOG(FLUID_DBG, "fluid_client_quit: done");
-    delete_fluid_thread(client->thread);
 }
 
 void delete_fluid_client(fluid_client_t *client)

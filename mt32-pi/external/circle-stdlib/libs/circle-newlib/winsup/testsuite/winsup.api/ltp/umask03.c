@@ -19,7 +19,7 @@
 
 /*
  * NAME
- *	umask03.c
+ *	umask01.c
  *
  * DESCRIPTION
  *	Check that umask changes the mask, and that the previous
@@ -30,7 +30,7 @@
  *	corresponds to the previous value set.
  *
  * USAGE:  <for command-line>
- *		umask03 [-c n] [-i n] [-I x] [-P x] [-t]
+ *		umask01 [-c n] [-i n] [-I x] [-P x] [-t]
  *		where,  -c n : Run n copies concurrently.
  *			-i n : Execute test n times.
  *			-I x : Execute test for x seconds.
@@ -51,7 +51,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-const char *TCID = "umask03";
+const char *TCID = "umask01";
 int TST_TOTAL = 1;
 extern int Tst_count;
 
@@ -68,7 +68,6 @@ main(int argc, char **argv)
 	
 	struct stat statbuf;
 	unsigned mskval = 0000;
-	int failcnt = 0;
 	int fildes, i;
 	unsigned low9mode;
 
@@ -100,13 +99,12 @@ main(int argc, char **argv)
 				} else {
 					low9mode = statbuf.st_mode & 0777;
 					if (low9mode != (~mskval & 0777)) {
-						tst_resm(TFAIL,
-							 "got mode %o expected %o "
-							 "mask %o did not take",
+						tst_brkm(TBROK, cleanup,
+							 "got %0 expected %o"
+							 "mask didnot take",
 							 low9mode,
-							 (~mskval & 0777),
-							 mskval);
-						failcnt++;
+							 (~mskval & 0777));
+						/*NOTREACHED*/
 					} else {
 						tst_resm(TPASS, "Test "
 							"condition: %d, umask: "
@@ -116,9 +114,6 @@ main(int argc, char **argv)
 			}
 			close(fildes);
 		}
-		if (!failcnt)
-			tst_resm(TPASS, "umask correctly returns the "
-					"previous value for all masks");
 	}
 	cleanup();
 	/*NOTREACHED*/

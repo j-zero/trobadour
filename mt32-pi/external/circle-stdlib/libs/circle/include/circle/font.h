@@ -2,7 +2,7 @@
 // font.h
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2025  R. Stange <rsta2@gmx.net>
+// Copyright (C) 2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ struct TFont
 	unsigned first_char;
 	unsigned last_char;
 
-	const void *data;
+	const unsigned char *data;
 };
 
 extern const TFont Font6x7;
@@ -38,7 +38,6 @@ extern const TFont Font8x10;
 extern const TFont Font8x12;
 extern const TFont Font8x14;
 extern const TFont Font8x16;
-extern const TFont Font12x22;
 
 #ifndef DEFAULT_FONT
 #define DEFAULT_FONT	Font8x16

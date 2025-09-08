@@ -2,7 +2,7 @@
 // dmachannel.cpp
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2025  R. Stange <rsta2@gmx.net>
+// Copyright (C) 2014-2024  R. Stange <rsta2@o2online.de>
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -501,8 +501,6 @@ void CDMAChannel::Cancel (void)
 	assert (m_nChannel < DMA_CHANNELS);
 	write32 (ARM_DMACHAN_CS (m_nChannel), 0);
 
-	m_pCompletionRoutine = 0;
-
 	PeripheralExit ();
 }
 
@@ -534,10 +532,7 @@ void CDMAChannel::InterruptHandler (void)
 
 	assert (m_pCompletionRoutine != 0);
 	TDMACompletionRoutine *pCompletionRoutine = m_pCompletionRoutine;
-	if (m_nBuffers == 1)
-	{
-		m_pCompletionRoutine = 0;
-	}
+	m_pCompletionRoutine = 0;
 
 	assert (m_nCurrentBuffer < MaxCyclicBuffers);
 	(*pCompletionRoutine) (m_nChannel, m_nCurrentBuffer, m_bStatus, m_pCompletionParam);

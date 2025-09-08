@@ -4,7 +4,7 @@
 #include "sys/syscall.h"
 #include "sys/times.h"
 
-extern int errno;
+int errno;
 
 int __trap0 (int function, int p1, int p2, int p3);
 

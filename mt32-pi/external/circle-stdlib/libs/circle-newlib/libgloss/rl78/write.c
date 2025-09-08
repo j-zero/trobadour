@@ -57,7 +57,6 @@ typedef unsigned int UHI __attribute__((mode(HI)));
 
 static int initted = 0;
 
-int _SYS_write (int, char *, int);
 static void
 init_uart0 ()
 {
@@ -109,4 +108,4 @@ _write(int fd, char *ptr, int len)
   return rv;
 }
 
-int write (int, char *, int) __attribute__((weak, alias ("_write")));
+char * write (int) __attribute__((weak, alias ("_write")));

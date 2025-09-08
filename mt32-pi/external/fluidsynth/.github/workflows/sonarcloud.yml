@@ -8,8 +8,6 @@ on:
       - '.azure/**'
       - '.circleci/**'
       - '.github/workflows/linux.yml'
-      - '.github/workflows/solaris.yml'
-      - '.github/workflows/windows.yml'
       - '.cirrus.yml'
       - 'README.md'
   pull_request:
@@ -26,12 +24,10 @@ jobs:
   sonarcloud:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v4
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
-        submodules: recursive
-
     
     - name: Add apt-get repositories
       run: |

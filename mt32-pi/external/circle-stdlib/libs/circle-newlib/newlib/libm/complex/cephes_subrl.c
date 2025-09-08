@@ -35,8 +35,6 @@
 
 /* calculate cosh and sinh */
 
-/* On platforms where long double is as wide as double.  */
-#ifdef _LDBL_EQ_DBL
 void
 _cchshl(long double x, long double *c, long double *s)
 {
@@ -53,7 +51,6 @@ _cchshl(long double x, long double *c, long double *s)
 		*c = e + ei;
 	}
 }
-#endif
 
 /* Program to subtract nearest integer multiple of PI */
 
@@ -88,8 +85,6 @@ _redupil(long double x)
 
 /* Taylor series expansion for cosh(2y) - cos(2x) */
 
-/* On platforms where long double is as wide as double.  */
-#ifdef _LDBL_EQ_DBL
 long double
 _ctansl(long double complex z)
 {
@@ -131,4 +126,3 @@ _ctansl(long double complex z)
 	} while (fabsl(t/d) > MACHEPL);
 	return d;
 }
-#endif

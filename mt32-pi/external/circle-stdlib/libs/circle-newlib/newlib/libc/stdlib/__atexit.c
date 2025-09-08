@@ -53,7 +53,12 @@ const void * __atexit_dummy = &__call_exitprocs;
 extern _LOCK_RECURSIVE_T __atexit_recursive_mutex;
 #endif
 
-struct _atexit __atexit0 = _ATEXIT_INIT;
+#ifdef _REENT_GLOBAL_ATEXIT
+static struct _atexit _global_atexit0 = _ATEXIT_INIT;
+# define _GLOBAL_ATEXIT0 (&_global_atexit0)
+#else
+# define _GLOBAL_ATEXIT0 (&_GLOBAL_REENT->_atexit0)
+#endif
 
 /*
  * Register a function to be performed at exit or on shared library unload.
@@ -72,10 +77,10 @@ __register_exitproc (int type,
   __lock_acquire_recursive(__atexit_recursive_mutex);
 #endif
 
-  p = __atexit;
+  p = _GLOBAL_ATEXIT;
   if (p == NULL)
     {
-      __atexit = p = &__atexit0;
+      _GLOBAL_ATEXIT = p = _GLOBAL_ATEXIT0;
 #ifdef _REENT_SMALL
       extern struct _on_exit_args * const __on_exit_args _ATTRIBUTE ((weak));
       if (&__on_exit_args != NULL)
@@ -99,8 +104,8 @@ __register_exitproc (int type,
 	  return -1;
 	}
       p->_ind = 0;
-      p->_next = __atexit;
-      __atexit = p;
+      p->_next = _GLOBAL_ATEXIT;
+      _GLOBAL_ATEXIT = p;
 #ifndef _REENT_SMALL
       p->_on_exit_args._fntypes = 0;
       p->_on_exit_args._is_cxa = 0;
@@ -128,7 +133,7 @@ __register_exitproc (int type,
 	  if (args == NULL)
 	    {
 #ifndef __SINGLE_THREAD__
-	      __lock_release_recursive(__atexit_recursive_mutex);
+	      __lock_release(__atexit_recursive_mutex);
 #endif
 	      return -1;
 	    }

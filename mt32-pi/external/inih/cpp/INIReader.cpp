@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: BSD-3-Clause
 
-// Copyright (C) 2009-2025, Ben Hoyt
+// Copyright (C) 2009-2020, Ben Hoyt
 
 // inih and INIReader are released under the New BSD license (see LICENSE.txt).
 // Go to the project home page for more info:
@@ -24,7 +24,8 @@ INIReader::INIReader(const string& filename)
 
 INIReader::INIReader(const char *buffer, size_t buffer_size)
 {
-  _error = ini_parse_string_length(buffer, buffer_size, ValueHandler, this);
+  string content(buffer, buffer_size);
+  _error = ini_parse_string(content.c_str(), ValueHandler, this);
 }
 
 int INIReader::ParseError() const

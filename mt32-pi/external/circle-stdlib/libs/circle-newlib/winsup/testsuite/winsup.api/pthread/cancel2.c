@@ -96,7 +96,7 @@ mythread(void * arg)
       pthread_testcancel();
     }
 
-  return (void *) (size_t)result;
+  return (void *) result;
 }
 
 int
@@ -156,17 +156,17 @@ main()
   for (i = 1; i <= NUMTHREADS; i++)
     {
       int fail = 0;
-      void *result = 0;
+      int result = 0;
 
-      assert(pthread_join(t[i], &result) == 0);
-      fail = (result != PTHREAD_CANCELED);
+      assert(pthread_join(t[i], (void **) &result) == 0);
+      fail = (result != (int) PTHREAD_CANCELED);
       if (fail)
 	{
 	  fprintf(stderr, "Thread %d: started %d: location %d: cancel type %s\n",
 		  i,
 		  threadbag[i].started,
 		  result,
-		  (((int)(size_t)result % 2) == 0) ? "ASYNCHRONOUS" : "DEFERRED");
+		  ((result % 2) == 0) ? "ASYNCHRONOUS" : "DEFERRED");
 	}
       failed |= fail;
     }

@@ -2,8 +2,14 @@
  * MD4 hash implementation
  * Copyright (c) 2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -30,9 +36,6 @@ int md4_vector(size_t num_elem, const u8 *addr[], const size_t *len, u8 *mac)
 {
 	MD4_CTX ctx;
 	size_t i;
-
-	if (TEST_FAIL())
-		return -1;
 
 	MD4Init(&ctx);
 	for (i = 0; i < num_elem; i++)
@@ -85,7 +88,7 @@ MD4Transform(u32 state[4], const u8 block[MD4_BLOCK_LENGTH]);
 	(cp)[1] = (value) >> 8;						\
 	(cp)[0] = (value); } while (0)
 
-static const u8 PADDING[MD4_BLOCK_LENGTH] = {
+static u8 PADDING[MD4_BLOCK_LENGTH] = {
 	0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0

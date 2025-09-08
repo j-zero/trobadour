@@ -2,8 +2,14 @@
  * hostapd / EAP Authenticator state machine internal structures (RFC 4137)
  * Copyright (c) 2004-2007, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #ifndef EAP_I_H
@@ -23,7 +29,7 @@
  */
 struct eap_method {
 	int vendor;
-	enum eap_type method;
+	EapType method;
 	const char *name;
 
 	void * (*init)(struct eap_sm *sm);
@@ -32,14 +38,15 @@ struct eap_method {
 
 	struct wpabuf * (*buildReq)(struct eap_sm *sm, void *priv, u8 id);
 	int (*getTimeout)(struct eap_sm *sm, void *priv);
-	bool (*check)(struct eap_sm *sm, void *priv, struct wpabuf *respData);
+	Boolean (*check)(struct eap_sm *sm, void *priv,
+			 struct wpabuf *respData);
 	void (*process)(struct eap_sm *sm, void *priv,
 			struct wpabuf *respData);
-	bool (*isDone)(struct eap_sm *sm, void *priv);
+	Boolean (*isDone)(struct eap_sm *sm, void *priv);
 	u8 * (*getKey)(struct eap_sm *sm, void *priv, size_t *len);
 	/* isSuccess is not specified in draft-ietf-eap-statemachine-05.txt,
 	 * but it is useful in implementing Policy.getDecision() */
-	bool (*isSuccess)(struct eap_sm *sm, void *priv);
+	Boolean (*isSuccess)(struct eap_sm *sm, void *priv);
 
 	/**
 	 * free - Free EAP method data
@@ -87,19 +94,6 @@ struct eap_method {
 	 * private data or this function may derive the key.
 	 */
 	u8 * (*get_emsk)(struct eap_sm *sm, void *priv, size_t *len);
-
-	/**
-	 * getSessionId - Get EAP method specific Session-Id
-	 * @sm: Pointer to EAP state machine allocated with eap_server_sm_init()
-	 * @priv: Pointer to private EAP method data from eap_method::init()
-	 * @len: Pointer to a variable to store Session-Id length
-	 * Returns: Session-Id or %NULL if not available
-	 *
-	 * This function can be used to get the Session-Id from the EAP method.
-	 * The Session-Id may already be stored in the method-specific private
-	 * data or this function may derive the Session-Id.
-	 */
-	u8 * (*getSessionId)(struct eap_sm *sm, void *priv, size_t *len);
 };
 
 /**
@@ -115,8 +109,7 @@ struct eap_sm {
 		EAP_INITIALIZE_PASSTHROUGH, EAP_IDLE2, EAP_RETRANSMIT2,
 		EAP_RECEIVED2, EAP_DISCARD2, EAP_SEND_REQUEST2,
 		EAP_AAA_REQUEST, EAP_AAA_RESPONSE, EAP_AAA_IDLE,
-		EAP_TIMEOUT_FAILURE2, EAP_FAILURE2, EAP_SUCCESS2,
-		EAP_INITIATE_REAUTH_START, EAP_INITIATE_RECEIVED
+		EAP_TIMEOUT_FAILURE2, EAP_FAILURE2, EAP_SUCCESS2
 	} EAP_state;
 
 	/* Constants */
@@ -126,8 +119,8 @@ struct eap_sm {
 
 	/* Full authenticator state machine local variables */
 
-	/* Long-term (maintained between packets) */
-	enum eap_type currentMethod;
+	/* Long-term (maintained betwen packets) */
+	EapType currentMethod;
 	int currentId;
 	enum {
 		METHOD_PROPOSED, METHOD_CONTINUE, METHOD_END
@@ -137,74 +130,67 @@ struct eap_sm {
 	int methodTimeout;
 
 	/* Short-term (not maintained between packets) */
-	bool rxResp;
-	bool rxInitiate;
+	Boolean rxResp;
 	int respId;
-	enum eap_type respMethod;
+	EapType respMethod;
 	int respVendor;
 	u32 respVendorMethod;
-	bool ignore;
+	Boolean ignore;
 	enum {
 		DECISION_SUCCESS, DECISION_FAILURE, DECISION_CONTINUE,
-		DECISION_PASSTHROUGH, DECISION_INITIATE_REAUTH_START
+		DECISION_PASSTHROUGH
 	} decision;
 
 	/* Miscellaneous variables */
 	const struct eap_method *m; /* selected EAP method */
 	/* not defined in RFC 4137 */
-	bool changed;
-	void *eapol_ctx;
-	const struct eapol_callbacks *eapol_cb;
+	Boolean changed;
+	void *eapol_ctx, *msg_ctx;
+	struct eapol_callbacks *eapol_cb;
 	void *eap_method_priv;
 	u8 *identity;
 	size_t identity_len;
-	char *serial_num;
-	char imsi[20];
-	char sim_aka_permanent[20];
 	/* Whether Phase 2 method should validate identity match */
 	int require_identity_match;
 	int lastId; /* Identifier used in the last EAP-Packet */
 	struct eap_user *user;
 	int user_eap_method_index;
 	int init_phase2;
-	const struct eap_config *cfg;
-	struct eap_config cfg_buf;
-	bool update_user;
+	void *ssl_ctx;
+	void *eap_sim_db_priv;
+	Boolean backend_auth;
+	Boolean update_user;
+	int eap_server;
 
-	unsigned int num_rounds;
-	unsigned int num_rounds_short;
+	int num_rounds;
 	enum {
 		METHOD_PENDING_NONE, METHOD_PENDING_WAIT, METHOD_PENDING_CONT
 	} method_pending;
 
-	/* Optional challenges generated in Phase 1 (EAP-FAST) */
 	u8 *auth_challenge;
 	u8 *peer_challenge;
 
-	/* Whether to use the EAP-FAST-MSCHAPv2 instantiation of EAP-MSCHAPv2.
-	 * That variant is otherwise identical, but it generates the MSK using
-	 * MS-MPPE keys in reverse order. */
-	bool eap_fast_mschapv2;
-
+	u8 *pac_opaque_encr_key;
+	u8 *eap_fast_a_id;
+	size_t eap_fast_a_id_len;
+	char *eap_fast_a_id_info;
+	enum {
+		NO_PROV, ANON_PROV, AUTH_PROV, BOTH_PROV
+	} eap_fast_prov;
+	int pac_key_lifetime;
+	int pac_key_refresh_time;
+	int eap_sim_aka_result_ind;
+	int tnc;
+	struct wps_context *wps;
 	struct wpabuf *assoc_wps_ie;
-	struct wpabuf *assoc_p2p_ie;
 
-	bool start_reauth;
+	Boolean start_reauth;
 
 	u8 peer_addr[ETH_ALEN];
-
-	bool initiate_reauth_start_sent;
-	bool try_initiate_reauth;
-
-#ifdef CONFIG_TESTING_OPTIONS
-	u32 tls_test_flags;
-#endif /* CONFIG_TESTING_OPTIONS */
 };
 
 int eap_user_get(struct eap_sm *sm, const u8 *identity, size_t identity_len,
 		 int phase2);
-void eap_log_msg(struct eap_sm *sm, const char *fmt, ...)
-PRINTF_FORMAT(2, 3);
 void eap_sm_process_nak(struct eap_sm *sm, const u8 *nak_list, size_t len);
 
 #endif /* EAP_I_H */

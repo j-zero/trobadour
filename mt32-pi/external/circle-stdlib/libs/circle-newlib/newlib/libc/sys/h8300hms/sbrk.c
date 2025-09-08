@@ -1,10 +1,8 @@
 #include <_ansi.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <stdlib.h>
 
 register char *stack_ptr asm ("sp");
-extern int _write (int, char *, int);
 
 caddr_t 
   _sbrk(incr)

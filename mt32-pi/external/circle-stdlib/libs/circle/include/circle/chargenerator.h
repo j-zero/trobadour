@@ -2,7 +2,7 @@
 // chargenerator.h
 //
 // Circle - A C++ bare metal environment for Raspberry Pi
-// Copyright (C) 2014-2025  R. Stange <rsta2@gmx.net>
+// Copyright (C) 2014-2024  R. Stange <rsta2@o2online.de>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ public:
 		FontFlagsDoubleBoth	= FontFlagsDoubleWidth | FontFlagsDoubleHeight
 	};
 
-	typedef u32 TPixelLine;
+	typedef u8 TPixelLine;
 
 public:
 	/// \param rFont Font to be used
@@ -89,7 +89,6 @@ private:
 
 	unsigned m_nCharWidth;
 	unsigned m_nCharWidthOrig;
-	unsigned m_nCharStride;
 	unsigned m_nCharHeight;
 	unsigned m_nUnderline;
 };

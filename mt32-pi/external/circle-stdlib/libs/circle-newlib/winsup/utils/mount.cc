@@ -203,7 +203,7 @@ static struct option longopts[] =
 
 static char opts[] = "acfhmpVo:";
 
-static void __attribute__ ((__noreturn__))
+static void
 usage (FILE *where = stderr)
 {
   char *options;

@@ -119,7 +119,7 @@ Developers:
             <type>bool</type>
             <def>0 (FALSE)</def>
             <desc>
-                When set to 1 (TRUE), samples are loaded to and unloaded from memory whenever presets are being selected or unselected for a MIDI channel (PROGRAM_CHANGE and PROGRAM_SELECT events are typically responsible for this). This involves memory allocation, which is not realtime safe! So only enable this in non-realtime scenarios! E.g. when rendering to a WAVE file using the fast-file-renderer.
+                When set to 1 (TRUE), samples are loaded to and unloaded from memory whenever presets are being selected or unselected for a MIDI channel. PROGRAM_CHANGE and PROGRAM_SELECT events are typically responsible for this.
             </desc>
         </setting>
         <setting>
@@ -402,9 +402,9 @@ Developers:
                   coreaudio (Mac OS X),<br />
                   dart (OS/2)
             </def>
-            <vals>alsa, coreaudio, dart, dsound, file, jack, oboe, opensles, oss, portaudio, pulseaudio, sdl3, sndman, wasapi, waveout</vals>
+            <vals>alsa, coreaudio, dart, dsound, file, jack, oboe, opensles, oss, portaudio, pulseaudio, sdl2, sndman, wasapi, waveout</vals>
             <desc>
-                The audio system to be used. In order to use sdl3 as audio driver, the application is responsible for initializing SDL's audio subsystem.<br /><br /><strong>Note:</strong> waveout is available since fluidsynth 2.1.0, sdl3 since fluidsynth 2.4.4.
+                The audio system to be used. In order to use sdl2 as audio driver, the application is responsible for initializing SDL's audio subsystem.<br /><br /><strong>Note:</strong> sdl2 and waveout are available since fluidsynth 2.1.
             </desc>
         </setting>
         <setting>
@@ -707,11 +707,11 @@ Developers:
             </desc>
         </setting>
         <setting>
-            <name>sdl3.device</name>
+            <name>sdl2.device</name>
             <type>str</type>
             <def>default</def>
             <desc>
-                Device to use for SDL3 driver output.
+                Device to use for SDL2 driver output.
             </desc>
         </setting>
         <setting>

@@ -11,7 +11,6 @@
 
 #if LV_USE_QRCODE
 
-#include "../../misc/cache/lv_cache.h"
 #include "qrcodegen.h"
 
 /*********************
@@ -38,7 +37,7 @@ const lv_obj_class_t lv_qrcode_class = {
     .destructor_cb = lv_qrcode_destructor,
     .instance_size = sizeof(lv_qrcode_t),
     .base_class = &lv_canvas_class,
-    .name = "lv_qrcode",
+    .name = "qrcode",
 };
 
 /**********************

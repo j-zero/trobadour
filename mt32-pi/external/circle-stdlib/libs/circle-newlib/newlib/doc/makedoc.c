@@ -135,11 +135,6 @@ catchar (string_type *buffer, char ch)
   {
     buffer->size *=2;
     buffer->ptr = realloc(buffer->ptr, buffer->size);
-    if (!buffer->ptr)
-    {
-      fprintf(stderr,"Can't allocate memory\n");
-      exit(1);
-    }
   }
 
   buffer->ptr[buffer->write_idx ++ ] = ch;
@@ -1283,8 +1278,7 @@ compile (char *string)
 	}	    
     }
 
-    free(word);
-    return(ret);
+return(ret);
 }
 
  

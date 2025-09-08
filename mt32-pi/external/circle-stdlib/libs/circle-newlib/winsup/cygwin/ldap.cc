@@ -208,7 +208,7 @@ cyg_ldap::connect_non_ssl (PCWSTR domain)
   return ret;
 }
 
-static DWORD
+static DWORD WINAPI
 ldap_init_thr (LPVOID param)
 {
   cyg_ldap_init *cl = (cyg_ldap_init *) param;
@@ -251,7 +251,7 @@ cyg_ldap::search_s (PWCHAR base, ULONG scope, PWCHAR filter, PWCHAR *attrs)
   return ret;
 }
 
-static DWORD
+static DWORD WINAPI
 ldap_search_thr (LPVOID param)
 {
   cyg_ldap_search *cl = (cyg_ldap_search *) param;
@@ -293,7 +293,7 @@ cyg_ldap::next_page_s ()
   return ret;
 }
 
-static DWORD
+static DWORD WINAPI
 ldap_next_page_thr (LPVOID param)
 {
   cyg_ldap_next_page *cl = (cyg_ldap_next_page *) param;

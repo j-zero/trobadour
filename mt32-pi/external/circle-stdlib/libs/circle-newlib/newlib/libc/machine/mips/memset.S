@@ -32,6 +32,11 @@
 # include "machine/regdef.h"
 # define PREFETCH_STORE_HINT PREFETCH_HINT_PREPAREFORSTORE
 #elif _LIBC
+# include <sysdep.h>
+# include <regdef.h>
+# include <sys/asm.h>
+# define PREFETCH_STORE_HINT PREFETCH_HINT_PREPAREFORSTORE
+#elif _COMPILING_NEWLIB
 # include "machine/asm.h"
 # include "machine/regdef.h"
 # define PREFETCH_STORE_HINT PREFETCH_HINT_PREPAREFORSTORE
@@ -425,3 +430,8 @@ L(leave):
 	.set	at
 	.set	reorder
 END(MEMSET_NAME)
+#ifndef ANDROID_CHANGES
+# ifdef _LIBC
+libc_hidden_builtin_def (MEMSET_NAME)
+# endif
+#endif

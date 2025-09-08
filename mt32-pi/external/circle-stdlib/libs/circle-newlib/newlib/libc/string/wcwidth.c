@@ -197,11 +197,8 @@ __wcwidth (const wint_t ucs)
   if (ucs >= 0xd800 && ucs <= 0xdfff)
     return -1;
 
-  /* check CJK width mode (1: ambiguous-wide, 0: normal, -1: disabled) */
-  int cjk_lang = __locale_cjk_lang ();
-
   /* binary search in table of ambiguous characters */
-  if (cjk_lang > 0
+  if (__locale_cjk_lang ()
       && bisearch(ucs, ambiguous,
 		  sizeof(ambiguous) / sizeof(struct interval) - 1))
     return 2;
@@ -214,8 +211,7 @@ __wcwidth (const wint_t ucs)
   /* if we arrive here, ucs is not a combining or C0/C1 control character */
 
   /* binary search in table of wide character codes */
-  if (cjk_lang >= 0
-      && bisearch(ucs, wide,
+  if (bisearch(ucs, wide,
 	       sizeof(wide) / sizeof(struct interval) - 1))
     return 2;
   else

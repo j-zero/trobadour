@@ -3,15 +3,21 @@
  * a library.
  * Copyright (c) 2007, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
-#include "crypto/tls.h"
 #include "eap_server/eap.h"
+#include "tls.h"
 #include "wpabuf.h"
 
 void eap_example_peer_rx(const u8 *data, size_t data_len);
@@ -81,14 +87,13 @@ static int eap_example_server_init_tls(void)
 	/* tparams.private_key = "server.key"; */
 	tparams.private_key = "server-key.pem";
 	/* tparams.private_key_passwd = "whatever"; */
-	tparams.dh_file = "dh.conf";
 
 	if (tls_global_set_params(eap_ctx.tls_ctx, &tparams)) {
 		printf("Failed to set TLS parameters\n");
 		return -1;
 	}
 
-	if (tls_global_set_verify(eap_ctx.tls_ctx, 0, 1)) {
+	if (tls_global_set_verify(eap_ctx.tls_ctx, 0)) {
 		printf("Failed to set check_crl\n");
 		return -1;
 	}
@@ -97,118 +102,8 @@ static int eap_example_server_init_tls(void)
 }
 
 
-static int eap_server_register_methods(void)
-{
-	int ret = 0;
-
-#ifdef EAP_SERVER_IDENTITY
-	if (ret == 0)
-		ret = eap_server_identity_register();
-#endif /* EAP_SERVER_IDENTITY */
-
-#ifdef EAP_SERVER_MD5
-	if (ret == 0)
-		ret = eap_server_md5_register();
-#endif /* EAP_SERVER_MD5 */
-
-#ifdef EAP_SERVER_TLS
-	if (ret == 0)
-		ret = eap_server_tls_register();
-#endif /* EAP_SERVER_TLS */
-
-#ifdef EAP_SERVER_MSCHAPV2
-	if (ret == 0)
-		ret = eap_server_mschapv2_register();
-#endif /* EAP_SERVER_MSCHAPV2 */
-
-#ifdef EAP_SERVER_PEAP
-	if (ret == 0)
-		ret = eap_server_peap_register();
-#endif /* EAP_SERVER_PEAP */
-
-#ifdef EAP_SERVER_TLV
-	if (ret == 0)
-		ret = eap_server_tlv_register();
-#endif /* EAP_SERVER_TLV */
-
-#ifdef EAP_SERVER_GTC
-	if (ret == 0)
-		ret = eap_server_gtc_register();
-#endif /* EAP_SERVER_GTC */
-
-#ifdef EAP_SERVER_TTLS
-	if (ret == 0)
-		ret = eap_server_ttls_register();
-#endif /* EAP_SERVER_TTLS */
-
-#ifdef EAP_SERVER_SIM
-	if (ret == 0)
-		ret = eap_server_sim_register();
-#endif /* EAP_SERVER_SIM */
-
-#ifdef EAP_SERVER_AKA
-	if (ret == 0)
-		ret = eap_server_aka_register();
-#endif /* EAP_SERVER_AKA */
-
-#ifdef EAP_SERVER_AKA_PRIME
-	if (ret == 0)
-		ret = eap_server_aka_prime_register();
-#endif /* EAP_SERVER_AKA_PRIME */
-
-#ifdef EAP_SERVER_PAX
-	if (ret == 0)
-		ret = eap_server_pax_register();
-#endif /* EAP_SERVER_PAX */
-
-#ifdef EAP_SERVER_PSK
-	if (ret == 0)
-		ret = eap_server_psk_register();
-#endif /* EAP_SERVER_PSK */
-
-#ifdef EAP_SERVER_SAKE
-	if (ret == 0)
-		ret = eap_server_sake_register();
-#endif /* EAP_SERVER_SAKE */
-
-#ifdef EAP_SERVER_GPSK
-	if (ret == 0)
-		ret = eap_server_gpsk_register();
-#endif /* EAP_SERVER_GPSK */
-
-#ifdef EAP_SERVER_VENDOR_TEST
-	if (ret == 0)
-		ret = eap_server_vendor_test_register();
-#endif /* EAP_SERVER_VENDOR_TEST */
-
-#ifdef EAP_SERVER_FAST
-	if (ret == 0)
-		ret = eap_server_fast_register();
-#endif /* EAP_SERVER_FAST */
-
-#ifdef EAP_SERVER_WSC
-	if (ret == 0)
-		ret = eap_server_wsc_register();
-#endif /* EAP_SERVER_WSC */
-
-#ifdef EAP_SERVER_IKEV2
-	if (ret == 0)
-		ret = eap_server_ikev2_register();
-#endif /* EAP_SERVER_IKEV2 */
-
-#ifdef EAP_SERVER_TNC
-	if (ret == 0)
-		ret = eap_server_tnc_register();
-#endif /* EAP_SERVER_TNC */
-
-	return ret;
-}
-
-
 int eap_example_server_init(void)
 {
-	struct eap_session_data eap_sess;
-
 	if (eap_server_register_methods() < 0)
 		return -1;
 
@@ -225,17 +120,15 @@ int eap_example_server_init(void)
 	eap_conf.eap_server = 1;
 	eap_conf.ssl_ctx = eap_ctx.tls_ctx;
 
-	os_memset(&eap_sess, 0, sizeof(eap_sess));
-	eap_ctx.eap = eap_server_sm_init(&eap_ctx, &eap_cb, &eap_conf,
-					 &eap_sess);
+	eap_ctx.eap = eap_server_sm_init(&eap_ctx, &eap_cb, &eap_conf);
 	if (eap_ctx.eap == NULL)
 		return -1;
 
 	eap_ctx.eap_if = eap_get_interface(eap_ctx.eap);
 
 	/* Enable "port" and request EAP to start authentication. */
-	eap_ctx.eap_if->portEnabled = true;
-	eap_ctx.eap_if->eapRestart = true;
+	eap_ctx.eap_if->portEnabled = TRUE;
+	eap_ctx.eap_if->eapRestart = TRUE;
 
 	return 0;
 }
@@ -281,7 +174,7 @@ int eap_example_server_step(void)
 	}
 
 	if (process && eap_ctx.eap_if->eapReqData) {
-		/* Send EAP request to the peer */
+		/* Send EAP response to the server */
 		eap_example_peer_rx(wpabuf_head(eap_ctx.eap_if->eapReqData),
 				    wpabuf_len(eap_ctx.eap_if->eapReqData));
 	}
@@ -296,5 +189,5 @@ void eap_example_server_rx(const u8 *data, size_t data_len)
 	wpabuf_free(eap_ctx.eap_if->eapRespData);
 	eap_ctx.eap_if->eapRespData = wpabuf_alloc_copy(data, data_len);
 	if (eap_ctx.eap_if->eapRespData)
-		eap_ctx.eap_if->eapResp = true;
+		eap_ctx.eap_if->eapResp = TRUE;
 }

@@ -21,12 +21,12 @@ __adjust (struct _reent *ptr,
 
   if (dexp > MAXE)
     {
-      _REENT_ERRNO(ptr) = ERANGE;
+      ptr->_errno = ERANGE;
       return (sign) ? -HUGE_VAL : HUGE_VAL;
     }
   else if (dexp < MINE)
     {
-      _REENT_ERRNO(ptr) = ERANGE;
+      ptr->_errno = ERANGE;
       return 0.0;
     }
 

@@ -17,7 +17,6 @@
 #ifdef PREFER_THUMB
 .macro FUNC_START name
 	.global \name
-	.type \name, %function
 	.thumb_func
 \name:
 .endm
@@ -25,7 +24,6 @@
 #else
 .macro FUNC_START name
 	.global \name
-	.type \name, %function
 \name:
 .endm
 	.code 32

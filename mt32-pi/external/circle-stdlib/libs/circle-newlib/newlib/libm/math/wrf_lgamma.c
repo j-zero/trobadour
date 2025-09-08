@@ -41,7 +41,8 @@
 		/* lgammaf(finite) overflow */
 		errno = ERANGE;
 	    }
-        }
-	return y;
+	    return HUGE_VALF;
+        } else
+            return y;
 #endif
-}
+}             

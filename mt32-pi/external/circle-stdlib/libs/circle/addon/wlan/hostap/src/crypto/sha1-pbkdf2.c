@@ -2,16 +2,24 @@
  * SHA1-based key derivation function (PBKDF2) for IEEE 802.11i
  * Copyright (c) 2003-2005, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
 #include "sha1.h"
+#include "md5.h"
+#include "crypto.h"
 
-static int pbkdf2_sha1_f(const char *passphrase, const u8 *ssid,
+static int pbkdf2_sha1_f(const char *passphrase, const char *ssid,
 			 size_t ssid_len, int iterations, unsigned int count,
 			 u8 *digest)
 {
@@ -22,7 +30,7 @@ static int pbkdf2_sha1_f(const char *passphrase, const u8 *ssid,
 	size_t len[2];
 	size_t passphrase_len = os_strlen(passphrase);
 
-	addr[0] = ssid;
+	addr[0] = (u8 *) ssid;
 	len[0] = ssid_len;
 	addr[1] = count_buf;
 	len[1] = 4;
@@ -50,8 +58,6 @@ static int pbkdf2_sha1_f(const char *passphrase, const u8 *ssid,
 		for (j = 0; j < SHA1_MAC_LEN; j++)
 			digest[j] ^= tmp2[j];
 	}
-	forced_memzero(tmp, SHA1_MAC_LEN);
-	forced_memzero(tmp2, SHA1_MAC_LEN);
 
 	return 0;
 }
@@ -71,7 +77,7 @@ static int pbkdf2_sha1_f(const char *passphrase, const u8 *ssid,
  * iterations is set to 4096 and buflen to 32. This function is described in
  * IEEE Std 802.11-2004, Clause H.4. The main construction is from PKCS#5 v2.0.
  */
-int pbkdf2_sha1(const char *passphrase, const u8 *ssid, size_t ssid_len,
+int pbkdf2_sha1(const char *passphrase, const char *ssid, size_t ssid_len,
 		int iterations, u8 *buf, size_t buflen)
 {
 	unsigned int count = 0;
@@ -89,7 +95,6 @@ int pbkdf2_sha1(const char *passphrase, const u8 *ssid, size_t ssid_len,
 		pos += plen;
 		left -= plen;
 	}
-	forced_memzero(digest, SHA1_MAC_LEN);
 
 	return 0;
 }

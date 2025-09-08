@@ -13,13 +13,10 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v4
       with:
         persist-credentials: false
-
-    - name: Update Dependencies
-      run: sudo apt-get update
-
+    
     - name: Install Dependencies
       run: sudo apt-get install doxygen xsltproc
 

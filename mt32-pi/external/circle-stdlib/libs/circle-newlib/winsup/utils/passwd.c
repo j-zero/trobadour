@@ -266,7 +266,8 @@ SetModals (int xarg, int narg, int iarg, int Larg, PCWSTR server)
   return EvalRet (ret, NULL);
 }
 
-static void  __attribute__ ((__noreturn__))
+static void usage (FILE * stream, int status) __attribute__ ((noreturn));
+static void
 usage (FILE * stream, int status)
 {
   fprintf (stream, ""

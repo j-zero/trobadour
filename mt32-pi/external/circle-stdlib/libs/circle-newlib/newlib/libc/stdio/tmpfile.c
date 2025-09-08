@@ -65,15 +65,15 @@ _tmpfile_r (struct _reent *ptr)
       fd = _open_r (ptr, f, O_RDWR | O_CREAT | O_EXCL | O_BINARY,
 		    S_IRUSR | S_IWUSR);
     }
-  while (fd < 0 && _REENT_ERRNO(ptr) == EEXIST);
+  while (fd < 0 && ptr->_errno == EEXIST);
   if (fd < 0)
     return NULL;
   fp = _fdopen_r (ptr, fd, "wb+");
-  e = _REENT_ERRNO(ptr);
+  e = ptr->_errno;
   if (!fp)
     _close_r (ptr, fd);
   (void) _remove_r (ptr, f);
-  _REENT_ERRNO(ptr) = e;
+  ptr->_errno = e;
   return fp;
 }
 

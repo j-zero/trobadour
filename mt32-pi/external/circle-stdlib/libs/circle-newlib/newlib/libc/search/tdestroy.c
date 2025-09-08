@@ -26,10 +26,9 @@ __RCSID("$NetBSD: tdelete.c,v 1.2 1999/09/16 11:45:37 lukem Exp $");
 
 /* Walk the nodes of a tree */
 static void
-trecurse(
-	node_t *root,	/* Root of the tree to be walked */
-	void (*free_action)(void *)
-)
+trecurse(root, free_action)
+	node_t *root;	/* Root of the tree to be walked */
+	void (*free_action)(void *);
 {
   if (root->llink != NULL)
     trecurse(root->llink, free_action);

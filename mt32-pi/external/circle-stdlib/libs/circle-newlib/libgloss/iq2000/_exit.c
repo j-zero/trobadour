@@ -18,7 +18,7 @@ static void _do_dtors()
 }
 
 
-void _exit (int n)
+void _exit (n)
 {
   extern unsigned char __eh_frame_begin[];
   extern void __deregister_frame_info (void *);

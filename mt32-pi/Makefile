@@ -39,7 +39,7 @@ submodules:
 #
 $(CIRCLE_STDLIB_CONFIG) $(CIRCLE_CONFIG)&:
 	#patch config for mingw
-#	@${APPLY_PATCH} $(CIRCLESTDLIBHOME) patches/circle-std-config-mingw.patch
+	@${APPLY_PATCH} $(CIRCLESTDLIBHOME) patches/circle-std-config-mingw.patch
 	
 	@echo "Configuring for Raspberry Pi $(RASPBERRYPI) ($(BITS) bit)"
 	$(CIRCLESTDLIBHOME)/configure --raspberrypi=$(RASPBERRYPI) --prefix=$(PREFIX)
@@ -106,7 +106,7 @@ $(MT32EMUBUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
 fluidsynth: $(FLUIDSYNTHBUILDDIR)/.done
 
 $(FLUIDSYNTHBUILDDIR)/.done: $(CIRCLESTDLIBHOME)/.done
-#	@${APPLY_PATCH} $(FLUIDSYNTHHOME) patches/fluidsynth-2.4.7-circle.patch
+	@${APPLY_PATCH} $(FLUIDSYNTHHOME) patches/fluidsynth-2.4.7-circle.patch
 
 	@CFLAGS="$(CFLAGS_EXTERNAL)" \
 	cmake -B $(FLUIDSYNTHBUILDDIR) \
