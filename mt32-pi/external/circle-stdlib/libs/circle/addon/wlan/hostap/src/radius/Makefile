@@ -1,9 +1,9 @@
-all:
-	@echo Nothing to be made.
+CFLAGS += -DCONFIG_IPV6
 
-clean:
-	for d in $(SUBDIRS); do make -C $$d clean; done
-	rm -f *~ *.o *.d
+LIB_OBJS= \
+	radius.o \
+	radius_client.o \
+	radius_das.o \
+	radius_server.o
 
-install:
-	@echo Nothing to be made.
+include ../lib.rules

@@ -110,12 +110,6 @@ then
     STDDEF_INCPATH=$(echo | "$CC" -v -x c -E - 2>&1 | grep "^ /.*include$" | head -1 | sed -e "s/ //")
 fi
 
-if [ "$STDDEF_INCPATH" = "" ]
-then
-    # TODO this is probably very GCC-specific and MinGW-specific
-    STDDEF_INCPATH=$(echo | "$CC" -v -x c -E - 2>&1 | grep "^ [a-z]:.*include$" | head -1  | sed -e 's/ \([a-z]\):/\/\1/' -e 's/\\/\//g')
-fi
-
 if [ ! -f "$STDDEF_INCPATH/stddef.h" ]
 then
     echo "Error: Unable to determine include path for stddef.h, exiting" >&2
@@ -193,7 +187,7 @@ ARCH=$(make -n -p -f libs/circle/Rules.mk CIRCLEHOME=libs/circle | grep '^ARCH =
     sed -e "s/\$(ARCHCPU)/$ARCHCPU/" -e 's/ARCH = //')
 
 export \
-    CPPFLAGS_FOR_TARGET="-I\"$CIRCLEHOME/include\" -I\"$CIRCLEHOME/addon\" -I\"$TOPDIR/include\"" \
+    CPPFLAGS_FOR_TARGET="-isystem \"$CIRCLEHOME/include\" -isystem \"$CIRCLEHOME/addon\" -isystem \"$TOPDIR/include\"" \
     CC_FOR_TARGET=${TOOLPREFIX}gcc \
     CXX_FOR_TARGET=${TOOLPREFIX}g++ \
     GCC_FOR_TARGET=${TOOLPREFIX}gcc \
@@ -210,7 +204,7 @@ then
 else
     CFLAGS_FOR_TARGET="$ARCH -DRASPPI=$RASPBERRYPI $OPTIONS -Wno-parentheses"
 fi
-export CFLAGS_FOR_TARGET
+export CFLAGS_FOR_TARGET CXXFLAGS_FOR_TARGET="$CFLAGS_FOR_TARGET"
 
 (
     cd $NEWLIB_BUILD_DIR
@@ -226,6 +220,7 @@ export CFLAGS_FOR_TARGET
     echo "NEWLIB_BUILD_DIR = ${NEWLIB_BUILD_DIR}"
     echo "NEWLIB_INSTALL_DIR = ${NEWLIB_INSTALL_DIR}"
     echo "CFLAGS_FOR_TARGET = ${CFLAGS_FOR_TARGET}"
+    echo "CXXFLAGS_FOR_TARGET = ${CXXFLAGS_FOR_TARGET}"
     echo "CPPFLAGS_FOR_TARGET = ${CPPFLAGS_FOR_TARGET}"
     echo "CC_FOR_TARGET = ${CC_FOR_TARGET}"
     echo "CXX_FOR_TARGET = ${CXX_FOR_TARGET}"

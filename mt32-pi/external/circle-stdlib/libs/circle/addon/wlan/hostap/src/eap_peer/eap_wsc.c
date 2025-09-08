@@ -1,15 +1,9 @@
 /*
  * EAP-WSC peer for Wi-Fi Protected Setup
- * Copyright (c) 2007-2009, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2007-2009, 2012, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -23,7 +17,7 @@
 
 
 struct eap_wsc_data {
-	enum { WAIT_START, MESG, FRAG_ACK, WAIT_FRAG_ACK, DONE, FAIL } state;
+	enum { WAIT_START, MESG, WAIT_FRAG_ACK, FAIL } state;
 	int registrar;
 	struct wpabuf *in_buf;
 	struct wpabuf *out_buf;
@@ -42,12 +36,8 @@ static const char * eap_wsc_state_txt(int state)
 		return "WAIT_START";
 	case MESG:
 		return "MESG";
-	case FRAG_ACK:
-		return "FRAG_ACK";
 	case WAIT_FRAG_ACK:
 		return "WAIT_FRAG_ACK";
-	case DONE:
-		return "DONE";
 	case FAIL:
 		return "FAIL";
 	default:
@@ -83,35 +73,47 @@ static int eap_wsc_new_ap_settings(struct wps_credential *cred,
 	else
 		len = end - pos;
 	if ((len & 1) || len > 2 * sizeof(cred->ssid) ||
-	    hexstr2bin(pos, cred->ssid, len / 2))
+	    hexstr2bin(pos, cred->ssid, len / 2)) {
+		wpa_printf(MSG_DEBUG, "EAP-WSC: Invalid new_ssid");
 		return -1;
+	}
 	cred->ssid_len = len / 2;
 
 	pos = os_strstr(params, "new_auth=");
-	if (pos == NULL)
+	if (pos == NULL) {
+		wpa_printf(MSG_DEBUG, "EAP-WSC: Missing new_auth");
 		return -1;
+	}
 	if (os_strncmp(pos + 9, "OPEN", 4) == 0)
 		cred->auth_type = WPS_AUTH_OPEN;
 	else if (os_strncmp(pos + 9, "WPAPSK", 6) == 0)
 		cred->auth_type = WPS_AUTH_WPAPSK;
 	else if (os_strncmp(pos + 9, "WPA2PSK", 7) == 0)
 		cred->auth_type = WPS_AUTH_WPA2PSK;
-	else
+	else {
+		wpa_printf(MSG_DEBUG, "EAP-WSC: Unknown new_auth");
 		return -1;
+	}
 
 	pos = os_strstr(params, "new_encr=");
-	if (pos == NULL)
+	if (pos == NULL) {
+		wpa_printf(MSG_DEBUG, "EAP-WSC: Missing new_encr");
 		return -1;
+	}
 	if (os_strncmp(pos + 9, "NONE", 4) == 0)
 		cred->encr_type = WPS_ENCR_NONE;
+#ifdef CONFIG_TESTING_OPTIONS
 	else if (os_strncmp(pos + 9, "WEP", 3) == 0)
 		cred->encr_type = WPS_ENCR_WEP;
+#endif /* CONFIG_TESTING_OPTIONS */
 	else if (os_strncmp(pos + 9, "TKIP", 4) == 0)
 		cred->encr_type = WPS_ENCR_TKIP;
 	else if (os_strncmp(pos + 9, "CCMP", 4) == 0)
 		cred->encr_type = WPS_ENCR_AES;
-	else
+	else {
+		wpa_printf(MSG_DEBUG, "EAP-WSC: Unknown new_encr");
 		return -1;
+	}
 
 	pos = os_strstr(params, "new_key=");
 	if (pos == NULL)
@@ -123,8 +125,10 @@ static int eap_wsc_new_ap_settings(struct wps_credential *cred,
 	else
 		len = end - pos;
 	if ((len & 1) || len > 2 * sizeof(cred->key) ||
-	    hexstr2bin(pos, cred->key, len / 2))
+	    hexstr2bin(pos, cred->key, len / 2)) {
+		wpa_printf(MSG_DEBUG, "EAP-WSC: Invalid new_key");
 		return -1;
+	}
 	cred->key_len = len / 2;
 
 	return 1;
@@ -138,11 +142,13 @@ static void * eap_wsc_init(struct eap_sm *sm)
 	size_t identity_len;
 	int registrar;
 	struct wps_config cfg;
-	const char *pos;
+	const char *pos, *end;
 	const char *phase1;
 	struct wps_context *wps;
 	struct wps_credential new_ap_settings;
 	int res;
+	int nfc = 0;
+	u8 pkhash[WPS_OOB_PUBKEY_HASH_LEN];
 
 	wps = sm->wps;
 	if (wps == NULL) {
@@ -190,22 +196,57 @@ static void * eap_wsc_init(struct eap_sm *sm)
 		while (*pos != '\0' && *pos != ' ')
 			pos++;
 		cfg.pin_len = pos - (const char *) cfg.pin;
+		if (cfg.pin_len == 6 &&
+		    os_strncmp((const char *) cfg.pin, "nfc-pw", 6) == 0) {
+			cfg.pin = NULL;
+			cfg.pin_len = 0;
+			nfc = 1;
+		}
 	} else {
 		pos = os_strstr(phase1, "pbc=1");
 		if (pos)
 			cfg.pbc = 1;
 	}
 
-	if (cfg.pin == NULL && !cfg.pbc) {
+	pos = os_strstr(phase1, "dev_pw_id=");
+	if (pos) {
+		u16 id = atoi(pos + 10);
+		if (id == DEV_PW_NFC_CONNECTION_HANDOVER)
+			nfc = 1;
+		if (cfg.pin || id == DEV_PW_NFC_CONNECTION_HANDOVER)
+			cfg.dev_pw_id = id;
+	}
+
+	if (cfg.pin == NULL && !cfg.pbc && !nfc) {
 		wpa_printf(MSG_INFO, "EAP-WSC: PIN or PBC not set in phase1 "
 			   "configuration data");
 		os_free(data);
 		return NULL;
 	}
 
+	pos = os_strstr(phase1, " pkhash=");
+	if (pos) {
+		size_t len;
+		pos += 8;
+		end = os_strchr(pos, ' ');
+		if (end)
+			len = end - pos;
+		else
+			len = os_strlen(pos);
+		if (len != 2 * WPS_OOB_PUBKEY_HASH_LEN ||
+		    hexstr2bin(pos, pkhash, WPS_OOB_PUBKEY_HASH_LEN)) {
+			wpa_printf(MSG_INFO, "EAP-WSC: Invalid pkhash");
+			os_free(data);
+			return NULL;
+		}
+		cfg.peer_pubkey_hash = pkhash;
+	}
+
 	res = eap_wsc_new_ap_settings(&new_ap_settings, phase1);
 	if (res < 0) {
 		os_free(data);
+		wpa_printf(MSG_DEBUG, "EAP-WSC: Failed to parse new AP "
+			   "settings");
 		return NULL;
 	}
 	if (res == 1) {
@@ -214,17 +255,41 @@ static void * eap_wsc_init(struct eap_sm *sm)
 		cfg.new_ap_settings = &new_ap_settings;
 	}
 
+	pos = os_strstr(phase1, "multi_ap=");
+	if (pos) {
+		u16 id = atoi(pos + 9);
+
+		if (id != 0) {
+			cfg.multi_ap_backhaul_sta = 1;
+			cfg.multi_ap_profile = id;
+		} else {
+			wpa_printf(MSG_DEBUG,
+				   "EAP-WSC: Invalid multi_ap setting");
+		}
+	}
+
 	data->wps = wps_init(&cfg);
 	if (data->wps == NULL) {
 		os_free(data);
+		wpa_printf(MSG_DEBUG, "EAP-WSC: wps_init failed");
 		return NULL;
 	}
-	data->fragment_size = WSC_FRAGMENT_SIZE;
+	res = eap_get_config_fragment_size(sm);
+	if (res > 0)
+		data->fragment_size = res;
+	else
+		data->fragment_size = WSC_FRAGMENT_SIZE;
+	wpa_printf(MSG_DEBUG, "EAP-WSC: Fragment size limit %u",
+		   (unsigned int) data->fragment_size);
 
 	if (registrar && cfg.pin) {
-		wps_registrar_add_pin(data->wps_ctx->registrar, NULL,
+		wps_registrar_add_pin(data->wps_ctx->registrar, NULL, NULL,
 				      cfg.pin, cfg.pin_len, 0);
 	}
+
+	/* Use reduced client timeout for WPS to avoid long wait */
+	if (sm->ClientTimeout > 30)
+		sm->ClientTimeout = 30;
 
 	return data;
 }
@@ -249,9 +314,9 @@ static struct wpabuf * eap_wsc_build_msg(struct eap_wsc_data *data,
 	u8 flags;
 	size_t send_len, plen;
 
-	ret->ignore = FALSE;
+	ret->ignore = false;
 	wpa_printf(MSG_DEBUG, "EAP-WSC: Generating Response");
-	ret->allowNotifications = TRUE;
+	ret->allowNotifications = true;
 
 	flags = 0;
 	send_len = wpabuf_len(data->out_buf) - data->out_used;
@@ -345,7 +410,7 @@ static struct wpabuf * eap_wsc_process_fragment(struct eap_wsc_data *data,
 	if (data->in_buf == NULL && !(flags & WSC_FLAGS_LF)) {
 		wpa_printf(MSG_DEBUG, "EAP-WSC: No Message Length field in a "
 			   "fragmented packet");
-		ret->ignore = TRUE;
+		ret->ignore = true;
 		return NULL;
 	}
 
@@ -355,7 +420,7 @@ static struct wpabuf * eap_wsc_process_fragment(struct eap_wsc_data *data,
 		if (data->in_buf == NULL) {
 			wpa_printf(MSG_DEBUG, "EAP-WSC: No memory for "
 				   "message");
-			ret->ignore = TRUE;
+			ret->ignore = true;
 			return NULL;
 		}
 		data->in_op_code = op_code;
@@ -381,11 +446,12 @@ static struct wpabuf * eap_wsc_process(struct eap_sm *sm, void *priv,
 	u16 message_length = 0;
 	enum wps_process_res res;
 	struct wpabuf tmpbuf;
+	struct wpabuf *r;
 
 	pos = eap_hdr_validate(EAP_VENDOR_WFA, EAP_VENDOR_TYPE_WSC, reqData,
 			       &len);
 	if (pos == NULL || len < 2) {
-		ret->ignore = TRUE;
+		ret->ignore = true;
 		return NULL;
 	}
 
@@ -399,16 +465,16 @@ static struct wpabuf * eap_wsc_process(struct eap_sm *sm, void *priv,
 	if (flags & WSC_FLAGS_LF) {
 		if (end - pos < 2) {
 			wpa_printf(MSG_DEBUG, "EAP-WSC: Message underflow");
-			ret->ignore = TRUE;
+			ret->ignore = true;
 			return NULL;
 		}
 		message_length = WPA_GET_BE16(pos);
 		pos += 2;
 
-		if (message_length < end - pos) {
+		if (message_length < end - pos || message_length > 50000) {
 			wpa_printf(MSG_DEBUG, "EAP-WSC: Invalid Message "
 				   "Length");
-			ret->ignore = TRUE;
+			ret->ignore = true;
 			return NULL;
 		}
 	}
@@ -421,7 +487,7 @@ static struct wpabuf * eap_wsc_process(struct eap_sm *sm, void *priv,
 		if (op_code != WSC_FRAG_ACK) {
 			wpa_printf(MSG_DEBUG, "EAP-WSC: Unexpected Op-Code %d "
 				   "in WAIT_FRAG_ACK state", op_code);
-			ret->ignore = TRUE;
+			ret->ignore = true;
 			return NULL;
 		}
 		wpa_printf(MSG_DEBUG, "EAP-WSC: Fragment acknowledged");
@@ -433,7 +499,7 @@ static struct wpabuf * eap_wsc_process(struct eap_sm *sm, void *priv,
 	    op_code != WSC_Done && op_code != WSC_Start) {
 		wpa_printf(MSG_DEBUG, "EAP-WSC: Unexpected Op-Code %d",
 			   op_code);
-		ret->ignore = TRUE;
+		ret->ignore = true;
 		return NULL;
 	}
 
@@ -441,7 +507,7 @@ static struct wpabuf * eap_wsc_process(struct eap_sm *sm, void *priv,
 		if (op_code != WSC_Start) {
 			wpa_printf(MSG_DEBUG, "EAP-WSC: Unexpected Op-Code %d "
 				   "in WAIT_START state", op_code);
-			ret->ignore = TRUE;
+			ret->ignore = true;
 			return NULL;
 		}
 		wpa_printf(MSG_DEBUG, "EAP-WSC: Received start");
@@ -451,13 +517,13 @@ static struct wpabuf * eap_wsc_process(struct eap_sm *sm, void *priv,
 	} else if (op_code == WSC_Start) {
 		wpa_printf(MSG_DEBUG, "EAP-WSC: Unexpected Op-Code %d",
 			   op_code);
-		ret->ignore = TRUE;
+		ret->ignore = true;
 		return NULL;
 	}
 
 	if (data->in_buf &&
 	    eap_wsc_process_cont(data, pos, end - pos, op_code) < 0) {
-		ret->ignore = TRUE;
+		ret->ignore = true;
 		return NULL;
 	}
 
@@ -500,20 +566,28 @@ send_msg:
 		if (data->out_buf == NULL) {
 			wpa_printf(MSG_DEBUG, "EAP-WSC: Failed to receive "
 				   "message from WPS");
+			eap_wsc_state(data, FAIL);
+			ret->methodState = METHOD_DONE;
+			ret->decision = DECISION_FAIL;
 			return NULL;
 		}
 		data->out_used = 0;
 	}
 
 	eap_wsc_state(data, MESG);
-	return eap_wsc_build_msg(data, ret, id);
+	r = eap_wsc_build_msg(data, ret, id);
+	if (data->state == FAIL && ret->methodState == METHOD_DONE) {
+		/* Use reduced client timeout for WPS to avoid long wait */
+		if (sm->ClientTimeout > 2)
+			sm->ClientTimeout = 2;
+	}
+	return r;
 }
 
 
 int eap_peer_wsc_register(void)
 {
 	struct eap_method *eap;
-	int ret;
 
 	eap = eap_peer_method_alloc(EAP_PEER_METHOD_INTERFACE_VERSION,
 				    EAP_VENDOR_WFA, EAP_VENDOR_TYPE_WSC,
@@ -525,8 +599,5 @@ int eap_peer_wsc_register(void)
 	eap->deinit = eap_wsc_deinit;
 	eap->process = eap_wsc_process;
 
-	ret = eap_peer_method_register(eap);
-	if (ret)
-		eap_peer_method_free(eap);
-	return ret;
+	return eap_peer_method_register(eap);
 }

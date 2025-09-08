@@ -86,12 +86,6 @@ else ( PULSE_SUPPORT )
     set ( AUDIO_MIDI_REPORT "${AUDIO_MIDI_REPORT}  PulseAudio:            no\n" )
 endif ( PULSE_SUPPORT )
 
-if ( SDL2_SUPPORT )
-    set ( AUDIO_MIDI_REPORT "${AUDIO_MIDI_REPORT}  SDL2:                  yes\n" )
-else ( SDL2_SUPPORT )
-    set ( AUDIO_MIDI_REPORT "${AUDIO_MIDI_REPORT}  SDL2:                  no\n" )
-endif ( SDL2_SUPPORT )
-
 if ( SDL3_SUPPORT )
     set ( AUDIO_MIDI_REPORT "${AUDIO_MIDI_REPORT}  SDL3:                  yes\n" )
 else ( SDL3_SUPPORT )
@@ -211,6 +205,8 @@ else ( WIN32 OR CYGWIN )
 endif ( WIN32 OR CYGWIN )
 
 set ( DEVEL_REPORT "\nDeveloper nerds info:\n" )
+
+set ( DEVEL_REPORT "${DEVEL_REPORT}  OS abstraction:        ${osal}\n" )
 
 if ( WITH_FLOAT )
   set ( DEVEL_REPORT "${DEVEL_REPORT}  Samples type:          float\n" )

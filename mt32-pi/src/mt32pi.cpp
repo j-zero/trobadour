@@ -1067,7 +1067,7 @@ void CMT32Pi::ProcessButtonEvent(const TButtonEvent& Event)
 	if (!Event.bPressed)
 		return;
 
-	if (Event.Button == TButton::Button2 && !Event.bRepeat)
+	if (Event.Button == TButton::Button1 && !Event.bRepeat)
 	{
 		// Swap synths
 		if (m_pCurrentSynth == m_pMT32Synth)
@@ -1075,7 +1075,7 @@ void CMT32Pi::ProcessButtonEvent(const TButtonEvent& Event)
 		else
 			SwitchSynth(TSynth::MT32);
 	}
-	else if (Event.Button == TButton::Button1 && !Event.bRepeat)
+	else if (Event.Button == TButton::Button2 && !Event.bRepeat)
 	{
 		if (m_pCurrentSynth == m_pMT32Synth)
 			NextMT32ROMSet();

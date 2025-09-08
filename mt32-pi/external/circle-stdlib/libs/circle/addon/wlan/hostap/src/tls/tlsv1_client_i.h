@@ -1,15 +1,9 @@
 /*
  * TLSv1 client - internal structures
- * Copyright (c) 2006-2007, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2006-2011, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef TLSV1_CLIENT_I_H
@@ -35,10 +29,14 @@ struct tlsv1_client {
 	u8 alert_level;
 	u8 alert_description;
 
+	unsigned int flags; /* TLS_CONN_* bitfield */
+
 	unsigned int certificate_requested:1;
 	unsigned int session_resumed:1;
 	unsigned int session_ticket_included:1;
 	unsigned int use_session_ticket:1;
+	unsigned int cert_in_cb:1;
+	unsigned int ocsp_resp_received:1;
 
 	struct crypto_public_key *server_rsa_key;
 
@@ -67,12 +65,22 @@ struct tlsv1_client {
 
 	tlsv1_client_session_ticket_cb session_ticket_cb;
 	void *session_ticket_cb_ctx;
+
+	struct wpabuf *partial_input;
+
+	void (*event_cb)(void *ctx, enum tls_event ev,
+			 union tls_event_data *data);
+	void *cb_ctx;
+
+	struct x509_certificate *server_cert;
 };
 
 
 void tls_alert(struct tlsv1_client *conn, u8 level, u8 description);
 void tlsv1_client_free_dh(struct tlsv1_client *conn);
-int tls_derive_pre_master_secret(u8 *pre_master_secret);
+u16 tls_client_highest_ver(struct tlsv1_client *conn);
+int tls_derive_pre_master_secret(struct tlsv1_client *conn,
+				 u8 *pre_master_secret);
 int tls_derive_keys(struct tlsv1_client *conn,
 		    const u8 *pre_master_secret, size_t pre_master_secret_len);
 u8 * tls_send_client_hello(struct tlsv1_client *conn, size_t *out_len);
@@ -83,5 +91,12 @@ u8 * tlsv1_client_handshake_write(struct tlsv1_client *conn, size_t *out_len,
 int tlsv1_client_process_handshake(struct tlsv1_client *conn, u8 ct,
 				   const u8 *buf, size_t *len,
 				   u8 **out_data, size_t *out_len);
+
+enum tls_ocsp_result {
+	TLS_OCSP_NO_RESPONSE, TLS_OCSP_INVALID, TLS_OCSP_GOOD, TLS_OCSP_REVOKED
+};
+
+enum tls_ocsp_result tls_process_ocsp_response(struct tlsv1_client *conn,
+					       const u8 *resp, size_t len);
 
 #endif /* TLSV1_CLIENT_I_H */

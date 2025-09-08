@@ -1,46 +1,28 @@
 ALL=radius_example
 
-all: $(ALL)
-
-ifndef CC
-CC=gcc
-endif
-
-ifndef CFLAGS
-CFLAGS = -MMD -O2 -Wall -g
-endif
+include ../src/build.rules
 
 CFLAGS += -I.
 CFLAGS += -I../src
-CFLAGS += -I../src/crypto
 CFLAGS += -I../src/utils
 
-OBJS += ../src/utils/common.o
-OBJS += ../src/utils/os_unix.o
-OBJS += ../src/utils/wpa_debug.o
-OBJS += ../src/utils/eloop.o
-OBJS += ../src/utils/ip_addr.o
-OBJS += ../src/crypto/md5.o ../src/crypto/md5-internal.o
+LIBS = ../src/radius/libradius.a
+LIBS += ../src/crypto/libcrypto.a
+LIBS += ../src/utils/libutils.a
+LLIBS = -lrt
 
-OBJS += ../src/radius/radius.o
-OBJS += ../src/radius/radius_client.o
-
-ifndef LDO
-LDO=$(CC)
-endif
-
+#CLAGS += -DCONFIG_IPV6
 
 OBJS_ex = radius_example.o
 
-libradius.a: $(OBJS)
-	ar rc libradius.a $(OBJS)
-	ranlib libradius.a
+_OBJS_VAR := OBJS_ex
+include ../src/objs.mk
 
-radius_example: $(OBJS_ex) libradius.a
-	$(LDO) $(LDFLAGS) -o radius_example $(OBJS_ex) -L. -lradius $(LIBS)
+_OBJS_VAR := LIBS
+include ../src/objs.mk
 
-clean:
-	$(MAKE) -C ../src clean
-	rm -f core *~ *.o *.d libradius.a $(ALL)
+radius_example: $(OBJS_ex) $(LIBS)
+	$(LDO) $(LDFLAGS) -o radius_example $(OBJS_ex) $(LIBS) $(LLIBS)
 
--include $(OBJS:%.o=%.d)
+clean: common-clean
+	rm -f core *~ *.o *.d

@@ -2,6 +2,7 @@
 
 #include <limits.h>
 #include "config.h"
+#include "circle_macros.h"
 #include <_ansi.h>
 #include <_syslist.h>
 #include <circle/startup.h>

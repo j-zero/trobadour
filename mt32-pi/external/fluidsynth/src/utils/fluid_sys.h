@@ -13,9 +13,8 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 
@@ -112,22 +111,19 @@
 /** Integer types  */
 #if HAVE_STDINT_H
 #include <stdint.h>
-
-#else
-
-/* Assume GLIB types */
-typedef gint8    int8_t;
-typedef guint8   uint8_t;
-typedef gint16   int16_t;
-typedef guint16  uint16_t;
-typedef gint32   int32_t;
-typedef guint32  uint32_t;
-typedef gint64   int64_t;
-typedef guint64  uint64_t;
-typedef guintptr uintptr_t;
-typedef gintptr  intptr_t;
-
 #endif
+
+
+#if OSAL_glib
+#include "fluid_sys_glib.h"
+#elif OSAL_embedded
+#include "fluid_sys_embedded.h"
+#elif OSAL_cpp11
+#include "fluid_sys_cpp11.h"
+#else
+#error "no OS abstraction configured"
+#endif
+
 
 /*
  * CYGWIN has its own version of <windows.h>, which can be
@@ -171,13 +167,6 @@ typedef gintptr  intptr_t;
 # define __Types__
 #endif
 
-#ifdef LADSPA
-#include <gmodule.h>
-#endif
-
-#define TRUE 1
-#define FALSE 0
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -194,8 +183,6 @@ extern "C" {
 char* fluid_get_windows_error(void);
 #endif
 
-#define FLUID_INLINE              inline
-
 #define FLUID_VERSION_CHECK(major, minor, patch) ((major<<16)|(minor<<8)|(patch))
 
 /* Integer<->pointer conversion */
@@ -204,12 +191,9 @@ char* fluid_get_windows_error(void);
 #define FLUID_POINTER_TO_INT(x)   ((signed int)(intptr_t)(x))
 #define FLUID_INT_TO_POINTER(x)   ((void *)(intptr_t)(x))
 
-/* Endian detection */
-#define FLUID_IS_BIG_ENDIAN       FALSE
-
-#define FLUID_LE32TOH(x)          x
-#define FLUID_LE16TOH(x)          x
-
+/*
+ * Utility functions
+ */
 #if FLUID_IS_BIG_ENDIAN
 #define FLUID_FOURCC(_a, _b, _c, _d) \
     (uint32_t)(((uint32_t)(_a) << 24) | ((uint32_t)(_b) << 16) | ((uint32_t)(_c) << 8) | (uint32_t)(_d))
@@ -218,17 +202,7 @@ char* fluid_get_windows_error(void);
     (uint32_t)(((uint32_t)(_d) << 24) | ((uint32_t)(_c) << 16) | ((uint32_t)(_b) << 8) | (uint32_t)(_a)) 
 #endif
 
-/*
- * Utility functions
- */
 char *fluid_strtok(char **str, char *delim);
-
-#define FLUID_FILE_TEST_EXISTS G_FILE_TEST_EXISTS
-#define FLUID_FILE_TEST_IS_REGULAR G_FILE_TEST_IS_REGULAR
-#define fluid_file_test(path, flags) g_file_test(path, flags)
-
-#define fluid_shell_parse_argv(command_line, argcp, argvp) g_shell_parse_argv(command_line, argcp, argvp, NULL)
-#define fluid_strfreev g_strfreev
 
 #if defined(__OS2__)
 #define INCL_DOS
@@ -260,75 +234,54 @@ typedef int (*fluid_timer_callback_t)(void *data, unsigned int msec);
 
 typedef struct _fluid_timer_t fluid_timer_t;
 
+fluid_timer_t *new_fluid_timer(int msec, fluid_timer_callback_t callback,
+                               void *data, int new_thread, int auto_destroy,
+                               int high_priority);
+
+void delete_fluid_timer(fluid_timer_t *timer);
+int fluid_timer_join(fluid_timer_t *timer);
+int fluid_timer_stop(fluid_timer_t *timer);
+int fluid_timer_is_running(const fluid_timer_t *timer);
+long fluid_timer_get_interval(const fluid_timer_t * timer);
+
 
 /* Atomic operations */
-#define fluid_atomic_int_inc(atomic) \
-    (__extension__({ __atomic_fetch_add((atomic), 1, __ATOMIC_SEQ_CST); }))
 
-#define fluid_atomic_int_get(atomic)                                  \
-    (__extension__({                                                  \
-        int gaig_temp;                                                \
-        __atomic_load((int *)(atomic), &gaig_temp, __ATOMIC_SEQ_CST); \
-        gaig_temp;                                                    \
-    }))
+static FLUID_INLINE void
+fluid_atomic_float_set(fluid_atomic_float_t *fptr, float val)
+{
+    int32_t ival;
+    memcpy(&ival, &val, 4);
+    fluid_atomic_int_set((fluid_atomic_int_t *)fptr, ival);
+}
 
-#define fluid_atomic_int_set(atomic, newval)                           \
-    (__extension__({                                                   \
-        int gais_temp = (int)(newval);                                 \
-        __atomic_store((int *)(atomic), &gais_temp, __ATOMIC_SEQ_CST); \
-    }))
+static FLUID_INLINE float
+fluid_atomic_float_get(fluid_atomic_float_t *fptr)
+{
+    int32_t ival;
+    float fval;
+    ival = fluid_atomic_int_get((fluid_atomic_int_t *)fptr);
+    memcpy(&fval, &ival, 4);
+    return fval;
+}
 
-#define fluid_atomic_int_compare_and_exchange(atomic, oldval, newval)                                                \
-    (__extension__({                                                                                                 \
-        int gaicae_oldval = (oldval);                                                                                \
-        __atomic_compare_exchange_n((atomic), &gaicae_oldval, (newval), FALSE, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST) ? \
-        TRUE :                                                                                                       \
-        FALSE;                                                                                                       \
-    }))
-
-#define fluid_atomic_int_exchange_and_add(atomic, val) fluid_atomic_int_add(atomic, val)
-
-#define fluid_atomic_int_add(atomic, val) \
-    (__extension__({ (int)__atomic_fetch_add((atomic), (val), __ATOMIC_SEQ_CST); }))
-
-#define fluid_atomic_float_get(atomic) (*atomic)
-#define fluid_atomic_float_set(atomic, newval) (*atomic = newval)
-
-typedef char fluid_mutex_t;
-#define FLUID_MUTEX_INIT { 0 }
-#define fluid_mutex_init(mutex) (void)mutex
-#define fluid_mutex_destroy(mutex) (void)mutex
-#define fluid_mutex_lock(mutex) (void)mutex
-#define fluid_mutex_unlock(mutex) (void)mutex
-
-typedef char fluid_rec_mutex_t;
-#define fluid_rec_mutex_init(mutex) (void)mutex
-#define fluid_rec_mutex_destroy(mutex) (void)mutex
-#define fluid_rec_mutex_lock(mutex) (void)mutex
-#define fluid_rec_mutex_unlock(mutex) (void)mutex
-
-typedef void* fluid_private_t;
-#define fluid_private_init(priv) memset(&priv, 0, sizeof (priv))
-#define fluid_private_get(priv) ((void*)priv)
-#define fluid_private_set(priv, data) (priv = (void*)data)
-#define fluid_private_free(priv)
 
 /* Threads */
 
-typedef char fluid_thread_t;
+typedef struct
+{
+    fluid_thread_func_t func;
+    void *data;
+    int prio_level;
+} fluid_thread_info_t;
 
-/* Dynamic Module Loading, currently only used by LADSPA subsystem */
-#ifdef LADSPA
+fluid_thread_t *new_fluid_thread(const char *name, fluid_thread_func_t func, void *data,
+                                 int prio_level, int detach);
+void delete_fluid_thread(fluid_thread_t *thread);
+void fluid_thread_self_set_prio(int prio_level);
 
-typedef GModule fluid_module_t;
+int fluid_thread_join(fluid_thread_t *thread);
 
-#define fluid_module_open(_name)        g_module_open((_name), G_MODULE_BIND_LOCAL)
-#define fluid_module_close(_mod)        g_module_close(_mod)
-#define fluid_module_error()            g_module_error()
-#define fluid_module_name(_mod)         g_module_name(_mod)
-#define fluid_module_symbol(_mod, _name, _ptr) g_module_symbol((_mod), (_name), (_ptr))
-
-#endif /* LADSPA */
 
 /* Sockets and I/O */
 
@@ -354,9 +307,6 @@ fluid_istream_t fluid_socket_get_istream(fluid_socket_t sock);
 fluid_ostream_t fluid_socket_get_ostream(fluid_socket_t sock);
 
 /* File access */
-#define fluid_stat(filename, buf) stat(filename, buf)
-typedef struct stat fluid_stat_buf_t;
- 
 FILE* fluid_file_open(const char* filename, const char** errMsg);
 fluid_long_long_t fluid_file_tell(FILE* f);
 
@@ -612,6 +562,11 @@ static FLUID_INLINE void *fluid_align_ptr(const void *ptr, unsigned int alignmen
 }
 
 #define FLUID_DEFAULT_ALIGNMENT (64U)
+
+
+/* Shell parsing */
+int fluid_shell_parse_argv_internal(const char *command_line, int *argcp, char ***argvp);
+void fluid_strfreev_internal(char **argvp);
 
 #ifdef __cplusplus
 }

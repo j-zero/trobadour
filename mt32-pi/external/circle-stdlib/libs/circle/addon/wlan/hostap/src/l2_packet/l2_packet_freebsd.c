@@ -3,25 +3,24 @@
  * Copyright (c) 2003-2005, Jouni Malinen <j@w1.fi>
  * Copyright (c) 2005, Sam Leffler <sam@errno.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__GLIBC__)
 #include <net/bpf.h>
 #endif /* __APPLE__ */
 #include <pcap.h>
 
 #include <sys/ioctl.h>
+#ifdef __sun__
+#include <libdlpi.h>
+#else /* __sun__ */
 #include <sys/sysctl.h>
+#endif /* __sun__ */
 
+#include <net/ethernet.h>
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <net/route.h>
@@ -31,6 +30,9 @@
 #include "eloop.h"
 #include "l2_packet.h"
 
+#ifndef ETHER_VLAN_ENCAP_LEN
+#define ETHER_VLAN_ENCAP_LEN 4
+#endif
 
 static const u8 pae_group_addr[ETH_ALEN] =
 { 0x01, 0x80, 0xc2, 0x00, 0x00, 0x03 };
@@ -86,7 +88,7 @@ static void l2_packet_receive(int sock, void *eloop_ctx, void *sock_ctx)
 
 	packet = pcap_next(pcap, &hdr);
 
-	if (packet == NULL || hdr.caplen < sizeof(*ethhdr))
+	if (!l2->rx_callback || !packet || hdr.caplen < sizeof(*ethhdr))
 		return;
 
 	ethhdr = (struct l2_ethhdr *) packet;
@@ -96,6 +98,13 @@ static void l2_packet_receive(int sock, void *eloop_ctx, void *sock_ctx)
 	} else {
 		buf = (unsigned char *) (ethhdr + 1);
 		len = hdr.caplen - sizeof(*ethhdr);
+
+		/* Handle IEEE 802.1Q encapsulated frames */
+		if (len >= ETHER_VLAN_ENCAP_LEN &&
+		    ethhdr->h_proto == htons(ETH_P_8021Q)) {
+			buf += ETHER_VLAN_ENCAP_LEN;
+			len -= ETHER_VLAN_ENCAP_LEN;
+		}
 	}
 	l2->rx_callback(l2->rx_callback_ctx, ethhdr->h_source, buf, len);
 }
@@ -124,10 +133,10 @@ static int l2_packet_init_libpcap(struct l2_packet_data *l2,
 	os_snprintf(pcap_filter, sizeof(pcap_filter),
 		    "not ether src " MACSTR " and "
 		    "( ether dst " MACSTR " or ether dst " MACSTR " ) and "
-		    "ether proto 0x%x",
+		    "( ether proto 0x%x or ( vlan 0 and ether proto 0x%x ) )",
 		    MAC2STR(l2->own_addr), /* do not receive own packets */
 		    MAC2STR(l2->own_addr), MAC2STR(pae_group_addr),
-		    protocol);
+		    protocol, protocol);
 	if (pcap_compile(l2->pcap, &pcap_fp, pcap_filter, 1, pcap_netp) < 0) {
 		fprintf(stderr, "pcap_compile: %s\n", pcap_geterr(l2->pcap));
 		return -1;
@@ -139,6 +148,7 @@ static int l2_packet_init_libpcap(struct l2_packet_data *l2,
 	}
 
 	pcap_freecode(&pcap_fp);
+#ifndef __sun__
 	/*
 	 * When libpcap uses BPF we must enable "immediate mode" to
 	 * receive frames right away; otherwise the system may
@@ -153,6 +163,7 @@ static int l2_packet_init_libpcap(struct l2_packet_data *l2,
 			/* XXX should we fail? */
 		}
 	}
+#endif /* __sun__ */
 
 	eloop_register_read_sock(pcap_get_selectable_fd(l2->pcap),
 				 l2_packet_receive, l2, l2->pcap);
@@ -163,6 +174,30 @@ static int l2_packet_init_libpcap(struct l2_packet_data *l2,
 
 static int eth_get(const char *device, u8 ea[ETH_ALEN])
 {
+#ifdef __sun__
+	dlpi_handle_t dh;
+	u32 physaddrlen = DLPI_PHYSADDR_MAX;
+	u8 physaddr[DLPI_PHYSADDR_MAX];
+	int retval;
+
+	retval = dlpi_open(device, &dh, 0);
+	if (retval != DLPI_SUCCESS) {
+		wpa_printf(MSG_ERROR, "dlpi_open error: %s",
+			   dlpi_strerror(retval));
+		return -1;
+	}
+
+	retval = dlpi_get_physaddr(dh, DL_CURR_PHYS_ADDR, physaddr,
+				   &physaddrlen);
+	if (retval != DLPI_SUCCESS) {
+		wpa_printf(MSG_ERROR, "dlpi_get_physaddr error: %s",
+			   dlpi_strerror(retval));
+		dlpi_close(dh);
+		return -1;
+	}
+	os_memcpy(ea, physaddr, ETH_ALEN);
+	dlpi_close(dh);
+#else /* __sun__ */
 	struct if_msghdr *ifm;
 	struct sockaddr_dl *sdl;
 	u_char *p, *buf;
@@ -195,6 +230,7 @@ static int eth_get(const char *device, u8 ea[ETH_ALEN])
 		errno = ESRCH;
 		return -1;
 	}
+#endif /* __sun__ */
 	return 0;
 }
 
@@ -228,6 +264,18 @@ struct l2_packet_data * l2_packet_init(
 	}
 
 	return l2;
+}
+
+
+struct l2_packet_data * l2_packet_init_bridge(
+	const char *br_ifname, const char *ifname, const u8 *own_addr,
+	unsigned short protocol,
+	void (*rx_callback)(void *ctx, const u8 *src_addr,
+			    const u8 *buf, size_t len),
+	void *rx_callback_ctx, int l2_hdr)
+{
+	return l2_packet_init(br_ifname, own_addr, protocol, rx_callback,
+			      rx_callback_ctx, l2_hdr);
 }
 
 
@@ -282,4 +330,11 @@ int l2_packet_get_ip_addr(struct l2_packet_data *l2, char *buf, size_t len)
 
 void l2_packet_notify_auth_start(struct l2_packet_data *l2)
 {
+}
+
+
+int l2_packet_set_packet_filter(struct l2_packet_data *l2,
+				enum l2_packet_filter_type type)
+{
+	return -1;
 }

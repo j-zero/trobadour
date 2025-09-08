@@ -13,9 +13,8 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 
@@ -133,6 +132,7 @@ struct _fluid_synth_t
     fluid_list_t *loaders;             /**< the SoundFont loaders */
     fluid_list_t *sfont;          /**< List of fluid_sfont_info_t for each loaded SoundFont (remains until SoundFont is unloaded) */
     int sfont_id;             /**< Incrementing ID assigned to each loaded SoundFont */
+    fluid_list_t *fonts_to_be_unloaded; /**< list of timers that try to unload a soundfont */
 
     float gain;                        /**< master gain */
     fluid_channel_t **channel;         /**< the channels */

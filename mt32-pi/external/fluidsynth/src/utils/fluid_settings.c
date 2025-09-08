@@ -13,9 +13,8 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "fluid_sys.h"
@@ -330,6 +329,11 @@ fluid_settings_init(fluid_settings_t *settings)
     fluid_return_if_fail(settings != NULL);
 
     fluid_synth_settings(settings);
+    fluid_shell_settings(settings);
+    fluid_player_settings(settings);
+    fluid_file_renderer_settings(settings);
+    fluid_audio_driver_settings(settings);
+    fluid_midi_driver_settings(settings);
 }
 
 static int

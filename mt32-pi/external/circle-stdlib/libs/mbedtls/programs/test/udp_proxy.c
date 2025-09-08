@@ -11,12 +11,12 @@
  * example of good general usage.
  */
 
-#if !defined(MBEDTLS_CONFIG_FILE)
-#include "mbedtls/config.h"
-#else
-#include MBEDTLS_CONFIG_FILE
-#endif
 
+#define MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
+
+#include "mbedtls/build_info.h"
+
+#include <limits.h>
 #if defined(MBEDTLS_PLATFORM_C)
 #include "mbedtls/platform.h"
 #else
@@ -34,8 +34,6 @@
 #define MBEDTLS_EXIT_SUCCESS    EXIT_SUCCESS
 #define MBEDTLS_EXIT_FAILURE    EXIT_FAILURE
 #endif /* MBEDTLS_PLATFORM_C */
-
-#include <limits.h>
 
 #if !defined(MBEDTLS_NET_C)
 int main(void)
@@ -65,9 +63,10 @@ int main(void)
 #endif
 #endif /* _MSC_VER */
 #else /* ( _WIN32 || _WIN32_WCE ) && !EFIX64 && !EFI32 */
-#if defined(MBEDTLS_HAVE_TIME)
+#if defined(MBEDTLS_HAVE_TIME) || (defined(MBEDTLS_TIMING_C) && !defined(MBEDTLS_TIMING_ALT))
 #include <sys/time.h>
 #endif
+#include <sys/select.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif /* ( _WIN32 || _WIN32_WCE ) && !EFIX64 && !EFI32 */
@@ -487,7 +486,7 @@ typedef struct {
 } packet;
 
 /* Print packet. Outgoing packets come with a reason (forward, dupl, etc.) */
-void print_packet(const packet *p, const char *why)
+static void print_packet(const packet *p, const char *why)
 {
 #if defined(MBEDTLS_TIMING_C)
     if (why == NULL) {
@@ -531,7 +530,7 @@ typedef enum {
 static inject_clihlo_state_t inject_clihlo_state;
 static packet initial_clihlo;
 
-int send_packet(const packet *p, const char *why)
+static int send_packet(const packet *p, const char *why)
 {
     int ret;
     mbedtls_net_context *dst = p->dst;
@@ -620,13 +619,13 @@ int send_packet(const packet *p, const char *why)
 static size_t prev_len;
 static packet prev[MAX_DELAYED_MSG];
 
-void clear_pending(void)
+static void clear_pending(void)
 {
     memset(&prev, 0, sizeof(prev));
     prev_len = 0;
 }
 
-void delay_packet(packet *delay)
+static void delay_packet(packet *delay)
 {
     if (prev_len == MAX_DELAYED_MSG) {
         return;
@@ -635,7 +634,7 @@ void delay_packet(packet *delay)
     memcpy(&prev[prev_len++], delay, sizeof(packet));
 }
 
-int send_delayed(void)
+static int send_delayed(void)
 {
     uint8_t offset;
     int ret;
@@ -667,9 +666,9 @@ int send_delayed(void)
 static unsigned char held[2048] = { 0 };
 #define HOLD_MAX 2
 
-int handle_message(const char *way,
-                   mbedtls_net_context *dst,
-                   mbedtls_net_context *src)
+static int handle_message(const char *way,
+                          mbedtls_net_context *dst,
+                          mbedtls_net_context *src)
 {
     int ret;
     packet cur;
@@ -942,8 +941,6 @@ accept:
 
     }
 
-    exit_code = MBEDTLS_EXIT_SUCCESS;
-
 exit:
 
 #ifdef MBEDTLS_ERROR_C
@@ -963,11 +960,6 @@ exit:
     mbedtls_net_free(&client_fd);
     mbedtls_net_free(&server_fd);
     mbedtls_net_free(&listen_fd);
-
-#if defined(_WIN32)
-    mbedtls_printf("  Press Enter to exit this program.\n");
-    fflush(stdout); getchar();
-#endif
 
     mbedtls_exit(exit_code);
 }

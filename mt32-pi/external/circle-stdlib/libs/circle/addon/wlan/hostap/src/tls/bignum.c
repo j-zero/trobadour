@@ -2,14 +2,8 @@
  * Big number math
  * Copyright (c) 2006, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -125,10 +119,10 @@ int bignum_cmp(const struct bignum *a, const struct bignum *b)
 
 
 /**
- * bignum_cmd_d - Compare bignum to standard integer
+ * bignum_cmp_d - Compare bignum to standard integer
  * @a: Bignum from bignum_init()
  * @b: Small integer
- * Returns: 0 on success, -1 on failure
+ * Returns: -1 if a < b, 0 if a == b, 1 if a > b
  */
 int bignum_cmp_d(const struct bignum *a, unsigned long b)
 {

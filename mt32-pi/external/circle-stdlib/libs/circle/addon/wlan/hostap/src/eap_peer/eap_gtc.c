@@ -2,14 +2,8 @@
  * EAP peer method: EAP-GTC (RFC 3748)
  * Copyright (c) 2004-2006, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -60,7 +54,7 @@ static struct wpabuf * eap_gtc_process(struct eap_sm *sm, void *priv,
 
 	pos = eap_hdr_validate(EAP_VENDOR_IETF, EAP_TYPE_GTC, reqData, &len);
 	if (pos == NULL) {
-		ret->ignore = TRUE;
+		ret->ignore = true;
 		return NULL;
 	}
 	id = eap_get_id(reqData);
@@ -91,15 +85,15 @@ static struct wpabuf * eap_gtc_process(struct eap_sm *sm, void *priv,
 	if (password == NULL) {
 		wpa_printf(MSG_INFO, "EAP-GTC: Password not configured");
 		eap_sm_request_otp(sm, (const char *) pos, len);
-		ret->ignore = TRUE;
+		ret->ignore = true;
 		return NULL;
 	}
 
-	ret->ignore = FALSE;
+	ret->ignore = false;
 
 	ret->methodState = data->prefix ? METHOD_MAY_CONT : METHOD_DONE;
 	ret->decision = DECISION_COND_SUCC;
-	ret->allowNotifications = FALSE;
+	ret->allowNotifications = false;
 
 	plen = password_len;
 	identity = eap_get_config_identity(sm, &identity_len);
@@ -133,7 +127,6 @@ static struct wpabuf * eap_gtc_process(struct eap_sm *sm, void *priv,
 int eap_peer_gtc_register(void)
 {
 	struct eap_method *eap;
-	int ret;
 
 	eap = eap_peer_method_alloc(EAP_PEER_METHOD_INTERFACE_VERSION,
 				    EAP_VENDOR_IETF, EAP_TYPE_GTC, "GTC");
@@ -144,8 +137,5 @@ int eap_peer_gtc_register(void)
 	eap->deinit = eap_gtc_deinit;
 	eap->process = eap_gtc_process;
 
-	ret = eap_peer_method_register(eap);
-	if (ret)
-		eap_peer_method_free(eap);
-	return ret;
+	return eap_peer_method_register(eap);
 }

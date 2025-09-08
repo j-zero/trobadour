@@ -1,15 +1,9 @@
 /*
  * AES (Rijndael) cipher
- * Copyright (c) 2003-2005, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef AES_I_H
@@ -50,6 +44,10 @@ extern const u8 rcons[10];
 #define TE432(i) (Te4[((i) >> 8) & 0xff] & 0x00ff0000)
 #define TE443(i) (Te4[(i) & 0xff] & 0x0000ff00)
 #define TE414(i) (Te4[((i) >> 24) & 0xff] & 0x000000ff)
+#define TE411(i) (Te4[((i) >> 24) & 0xff] & 0xff000000)
+#define TE422(i) (Te4[((i) >> 16) & 0xff] & 0x00ff0000)
+#define TE433(i) (Te4[((i) >> 8) & 0xff] & 0x0000ff00)
+#define TE444(i) (Te4[(i) & 0xff] & 0x000000ff)
 #define TE4(i) (Te4[(i)] & 0x000000ff)
 
 #define TD0(i) Td0[((i) >> 24) & 0xff]
@@ -67,7 +65,7 @@ extern const u8 rcons[10];
 
 #else /* AES_SMALL_TABLES */
 
-#define RCON(i) (rcons[(i)] << 24)
+#define RCON(i) ((u32) rcons[(i)] << 24)
 
 static inline u32 rotr(u32 val, int bits)
 {
@@ -86,16 +84,20 @@ static inline u32 rotr(u32 val, int bits)
 #define TE432(i) (Te0[((i) >> 8) & 0xff] & 0x00ff0000)
 #define TE443(i) (Te0[(i) & 0xff] & 0x0000ff00)
 #define TE414(i) ((Te0[((i) >> 24) & 0xff] >> 8) & 0x000000ff)
+#define TE411(i) ((Te0[((i) >> 24) & 0xff] << 8) & 0xff000000)
+#define TE422(i) (Te0[((i) >> 16) & 0xff] & 0x00ff0000)
+#define TE433(i) (Te0[((i) >> 8) & 0xff] & 0x0000ff00)
+#define TE444(i) ((Te0[(i) & 0xff] >> 8) & 0x000000ff)
 #define TE4(i) ((Te0[(i)] >> 8) & 0x000000ff)
 
 #define TD0(i) Td0[((i) >> 24) & 0xff]
 #define TD1(i) rotr(Td0[((i) >> 16) & 0xff], 8)
 #define TD2(i) rotr(Td0[((i) >> 8) & 0xff], 16)
 #define TD3(i) rotr(Td0[(i) & 0xff], 24)
-#define TD41(i) (Td4s[((i) >> 24) & 0xff] << 24)
-#define TD42(i) (Td4s[((i) >> 16) & 0xff] << 16)
-#define TD43(i) (Td4s[((i) >> 8) & 0xff] << 8)
-#define TD44(i) (Td4s[(i) & 0xff])
+#define TD41(i) ((u32) Td4s[((i) >> 24) & 0xff] << 24)
+#define TD42(i) ((u32) Td4s[((i) >> 16) & 0xff] << 16)
+#define TD43(i) ((u32) Td4s[((i) >> 8) & 0xff] << 8)
+#define TD44(i) ((u32) Td4s[(i) & 0xff])
 #define TD0_(i) Td0[(i) & 0xff]
 #define TD1_(i) rotr(Td0[(i) & 0xff], 8)
 #define TD2_(i) rotr(Td0[(i) & 0xff], 16)
@@ -115,8 +117,9 @@ static inline u32 rotr(u32 val, int bits)
 (ct)[2] = (u8)((st) >>  8); (ct)[3] = (u8)(st); }
 #endif
 
-#define AES_PRIV_SIZE (4 * 44)
+#define AES_PRIV_SIZE (4 * 4 * 15 + 4)
+#define AES_PRIV_NR_POS (4 * 15)
 
-void rijndaelKeySetupEnc(u32 rk[/*44*/], const u8 cipherKey[]);
+int rijndaelKeySetupEnc(u32 rk[], const u8 cipherKey[], int keyBits);
 
 #endif /* AES_I_H */

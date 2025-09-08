@@ -13,9 +13,8 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 #include "fluid_synth.h"
@@ -108,6 +107,7 @@ static int fluid_synth_render_blocks(fluid_synth_t *synth, int blockcount);
 static fluid_voice_t *fluid_synth_free_voice_by_kill_LOCAL(fluid_synth_t *synth);
 static void fluid_synth_kill_by_exclusive_class_LOCAL(fluid_synth_t *synth,
         fluid_voice_t *new_voice);
+static int fluid_synth_sfunload_callback(void *data, unsigned int msec);
 static fluid_tuning_t *fluid_synth_get_tuning(fluid_synth_t *synth,
         int bank, int prog);
 static int fluid_synth_replace_tuning_LOCK(fluid_synth_t *synth,
@@ -238,7 +238,7 @@ void fluid_synth_settings(fluid_settings_t *settings)
 
     fluid_settings_register_int(settings, "synth.min-note-length", 10, 0, 65535, 0);
 
-    fluid_settings_register_int(settings, "synth.threadsafe-api", 1, 0, 1, FLUID_HINT_TOGGLED);
+    fluid_settings_register_int(settings, "synth.threadsafe-api", FLUID_THREAD_SAFE_CAPABLE, 0, 1, FLUID_HINT_TOGGLED);
 
     fluid_settings_register_num(settings, "synth.overflow.percussion", 4000, -10000, 10000, 0);
     fluid_settings_register_num(settings, "synth.overflow.sustained", -1000, -10000, 10000, 0);
@@ -1167,8 +1167,16 @@ delete_fluid_synth(fluid_synth_t *synth)
 
     /* wait for and delete all the lazy sfont unloading timers */
 
-    /* REMOVED FOR HW */
+    for(list = synth->fonts_to_be_unloaded; list; list = fluid_list_next(list))
+    {
+        fluid_timer_t* timer = fluid_list_get(list);
+        // explicitly join to wait for the unload really to happen
+        fluid_timer_join(timer);
+        // delete_fluid_timer alone would stop the timer, even if it had not unloaded the soundfont yet
+        delete_fluid_timer(timer);
+    }
 
+    delete_fluid_list(synth->fonts_to_be_unloaded);
 
     if(synth->channel != NULL)
     {
@@ -1878,6 +1886,44 @@ fluid_synth_cc_LOCAL(fluid_synth_t *synth, int channum, int num)
                     else
                     {
                         FLUID_LOG(FLUID_INFO, "Ignoring unknown AWE32 NRPN targeting effect %d", gen);
+                    }
+                }
+            }
+            else if(fluid_channel_get_cc(chan, NRPN_MSB) == 1 && synth->bank_select == FLUID_BANK_STYLE_GS)
+            {
+                int nrpn2cc = -1;
+                int nrpn_lsb = fluid_channel_get_cc(chan, NRPN_LSB);
+                // cf. SC8850 owner's manual pages 227 + 228
+                switch(nrpn_lsb)
+                {
+                case 8:
+                    // vibrato rate
+                    nrpn2cc = SOUND_CTRL7;
+                    break;
+                case 9:
+                    // vibrato depth
+                    nrpn2cc = SOUND_CTRL8;
+                    break;
+                case 10:
+                    // vibrato rate
+                    nrpn2cc = SOUND_CTRL9;
+                    break;
+                default:
+                    break;
+                }
+                if(nrpn2cc != -1)
+                {
+                    if(synth->verbose)
+                    {
+                        FLUID_LOG(FLUID_INFO, "Translating Roland GS NRPN %d to CC %d", nrpn_lsb, nrpn2cc);
+                    }
+                    fluid_synth_cc(synth, channum, nrpn2cc, msb_value);
+                }
+                else
+                {
+                    if(synth->verbose)
+                    {
+                        FLUID_LOG(FLUID_INFO, "Ignoring unknown Roland GS NRPN %d", nrpn_lsb);
                     }
                 }
             }
@@ -5252,7 +5298,15 @@ fluid_synth_alloc_voice_LOCAL(fluid_synth_t *synth, fluid_sample_t *sample, int 
     */
     {
         int mono = fluid_channel_is_playing_mono(channel);
-        fluid_mod_t *default_mod = synth->default_mod;
+        fluid_mod_t *default_mod;
+        if (sample->default_modulators != NULL)
+        {
+            default_mod = sample->default_modulators;
+        }
+        else
+        {
+            default_mod = synth->default_mod;
+        }
 
         while(default_mod != NULL)
         {
@@ -5376,10 +5430,14 @@ fluid_synth_add_sfloader(fluid_synth_t *synth, fluid_sfloader_t *loader)
 }
 
 /**
- * Load a SoundFont file (filename is interpreted by SoundFont loaders).
- * The newly loaded SoundFont will be put on top of the SoundFont
+ * Load a SoundFont file.
+ *
+ * The @p filename is passed onto and interpreted by the SoundFont loaders.
+ * On success, the newly loaded SoundFont will be put on top of the SoundFont
  * stack. Presets are searched starting from the SoundFont on the
  * top of the stack, working the way down the stack until a preset is found.
+ *
+ * If the SoundFont is structural defect, it will be rejected and the function will fail.
  *
  * @param synth FluidSynth instance
  * @param filename File to load
@@ -5514,13 +5572,31 @@ fluid_synth_sfont_unref(fluid_synth_t *synth, fluid_sfont_t *sfont)
         {
             FLUID_LOG(FLUID_DBG, "Unloaded SoundFont");
         } /* spin off a timer thread to unload the sfont later (SoundFont loader blocked unload) */
-		//else REMOVED FOR HW
+        else
+        {
+            fluid_timer_t* timer = new_fluid_timer(100, fluid_synth_sfunload_callback, sfont, TRUE, FALSE, FALSE);
+            synth->fonts_to_be_unloaded = fluid_list_prepend(synth->fonts_to_be_unloaded, timer);
+        }
     }
 }
 
 /* Callback to continually attempt to unload a SoundFont,
  * only if a SoundFont loader blocked the unload operation */
-//REMOVED FOR HW
+static int
+fluid_synth_sfunload_callback(void *data, unsigned int msec)
+{
+    fluid_sfont_t *sfont = data;
+
+    if(fluid_sfont_delete_internal(sfont) == 0)
+    {
+        FLUID_LOG(FLUID_DBG, "Unloaded SoundFont");
+        return FALSE;
+    }
+    else
+    {
+        return TRUE;
+    }
+}
 
 /**
  * Reload a SoundFont.  The SoundFont retains its ID and index on the SoundFont stack.
@@ -7767,7 +7843,7 @@ static void fluid_synth_process_awe32_nrpn_LOCAL(fluid_synth_t *synth, int chan,
         case GEN_REVERBSEND:
             fluid_clip(data, 0, 255);
             /* transform the input value */
-            converted_sf2_generator_value = fluid_mod_transform_source_value(data, default_reverb_mod.flags1, 256);
+            converted_sf2_generator_value = fluid_mod_transform_source_value(NULL, data, default_reverb_mod.flags1, 256, TRUE);
             FLUID_LOG(FLUID_DBG, "AWE32 Reverb: %f", converted_sf2_generator_value);
             converted_sf2_generator_value*= fluid_mod_get_amount(&default_reverb_mod);
             break;
@@ -7775,7 +7851,7 @@ static void fluid_synth_process_awe32_nrpn_LOCAL(fluid_synth_t *synth, int chan,
         case GEN_CHORUSSEND:
             fluid_clip(data, 0, 255);
             /* transform the input value */
-            converted_sf2_generator_value = fluid_mod_transform_source_value(data, default_chorus_mod.flags1, 256);
+            converted_sf2_generator_value = fluid_mod_transform_source_value(NULL, data, default_chorus_mod.flags1, 256, TRUE);
             FLUID_LOG(FLUID_DBG, "AWE32 Chorus: %f", converted_sf2_generator_value);
             converted_sf2_generator_value*= fluid_mod_get_amount(&default_chorus_mod);
             break;
@@ -7829,7 +7905,56 @@ fluid_synth_get_gen(fluid_synth_t *synth, int chan, int param)
  * @param event MIDI event to handle
  * @return #FLUID_OK on success, #FLUID_FAILED otherwise
  */
-// REMOVED FOR HW
+int
+fluid_synth_handle_midi_event(void *data, fluid_midi_event_t *event)
+{
+    fluid_synth_t *synth = (fluid_synth_t *) data;
+    int type = fluid_midi_event_get_type(event);
+    int chan = fluid_midi_event_get_channel(event);
+
+    switch(type)
+    {
+    case NOTE_ON:
+        return fluid_synth_noteon(synth, chan,
+                                  fluid_midi_event_get_key(event),
+                                  fluid_midi_event_get_velocity(event));
+
+    case NOTE_OFF:
+        return fluid_synth_noteoff(synth, chan, fluid_midi_event_get_key(event));
+
+    case CONTROL_CHANGE:
+        return fluid_synth_cc(synth, chan,
+                              fluid_midi_event_get_control(event),
+                              fluid_midi_event_get_value(event));
+
+    case PROGRAM_CHANGE:
+        return fluid_synth_program_change(synth, chan, fluid_midi_event_get_program(event));
+
+    case CHANNEL_PRESSURE:
+        return fluid_synth_channel_pressure(synth, chan, fluid_midi_event_get_program(event));
+
+    case KEY_PRESSURE:
+        return fluid_synth_key_pressure(synth, chan,
+                                        fluid_midi_event_get_key(event),
+                                        fluid_midi_event_get_value(event));
+
+    case PITCH_BEND:
+        return fluid_synth_pitch_bend(synth, chan, fluid_midi_event_get_pitch(event));
+
+    case MIDI_SYSTEM_RESET:
+        return fluid_synth_system_reset(synth);
+
+    case MIDI_SYSEX:
+        return fluid_synth_sysex(synth, event->paramptr, event->param1, NULL, NULL, NULL, FALSE);
+
+    case MIDI_TEXT:
+    case MIDI_LYRIC:
+    case MIDI_SET_TEMPO:
+        return FLUID_OK;
+    }
+
+    return FLUID_FAILED;
+}
 
 /**
  * Create and start voices using an arbitrary preset and a MIDI note on event.

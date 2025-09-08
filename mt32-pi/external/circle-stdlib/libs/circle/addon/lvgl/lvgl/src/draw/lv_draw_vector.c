@@ -12,12 +12,17 @@
 
 #if LV_USE_VECTOR_GRAPHIC
 
+#if !((LV_USE_DRAW_SW && LV_USE_THORVG) || LV_USE_DRAW_VG_LITE)
+    #error "LV_USE_VECTOR_GRAPHIC requires either (LV_USE_DRAW_SW and LV_USE_THORVG) or LV_USE_DRAW_VG_LITE"
+#endif
+
 #include "../misc/lv_ll.h"
 #include "../misc/lv_types.h"
 #include "../stdlib/lv_string.h"
 #include <math.h>
 #include <float.h>
 
+#define EPSILON 1e-6f
 #define MATH_PI  3.14159265358979323846f
 #define MATH_HALF_PI 1.57079632679489661923f
 
@@ -70,11 +75,6 @@ static void _copy_draw_dsc(lv_vector_draw_dsc_t * dst, const lv_vector_draw_dsc_
     dst->stroke_dsc.join = src->stroke_dsc.join;
     dst->stroke_dsc.miter_limit = src->stroke_dsc.miter_limit;
     lv_array_copy(&(dst->stroke_dsc.dash_pattern), &(src->stroke_dsc.dash_pattern));
-    dst->stroke_dsc.gradient.style = src->stroke_dsc.gradient.style;
-    dst->stroke_dsc.gradient.cx = src->stroke_dsc.gradient.cx;
-    dst->stroke_dsc.gradient.cy = src->stroke_dsc.gradient.cy;
-    dst->stroke_dsc.gradient.cr = src->stroke_dsc.gradient.cr;
-    dst->stroke_dsc.gradient.spread = src->fill_dsc.gradient.spread;
     lv_memcpy(&(dst->stroke_dsc.gradient), &(src->stroke_dsc.gradient), sizeof(lv_vector_gradient_t));
     lv_memcpy(&(dst->stroke_dsc.matrix), &(src->stroke_dsc.matrix), sizeof(lv_matrix_t));
 
@@ -91,8 +91,8 @@ void lv_matrix_transform_point(const lv_matrix_t * matrix, lv_fpoint_t * point)
     float x = point->x;
     float y = point->y;
 
-    point->x = x * matrix->m[0][0] + y * matrix->m[1][0] + matrix->m[0][2];
-    point->y = x * matrix->m[0][1] + y * matrix->m[1][1] + matrix->m[1][2];
+    point->x = x * matrix->m[0][0] + y * matrix->m[0][1] + matrix->m[0][2];
+    point->y = x * matrix->m[1][0] + y * matrix->m[1][1] + matrix->m[1][2];
 }
 
 void lv_matrix_transform_path(const lv_matrix_t * matrix, lv_vector_path_t * path)
@@ -191,6 +191,162 @@ void lv_vector_path_cubic_to(lv_vector_path_t * path, const lv_fpoint_t * p1, co
     lv_array_push_back(&path->points, p3);
 }
 
+static lv_fpoint_t _point_on_ellipse(float rx, float ry, float cos_r, float sin_r,
+                                     float cx, float cy, float theta, float alpha)
+{
+    float cos_theta = cosf(theta);
+    float sin_theta = sinf(theta);
+
+    float x = rx * cos_theta;
+    float y = ry * sin_theta;
+
+    float x_rot = cos_r * x - sin_r * y;
+    float y_rot = sin_r * x + cos_r * y;
+
+    if(fabsf(alpha) > EPSILON) {
+        float dx = -rx * sin_theta;
+        float dy = ry * cos_theta;
+        float dx_rot = cos_r * dx - sin_r * dy;
+        float dy_rot = sin_r * dx + cos_r * dy;
+
+        x_rot += alpha * dx_rot;
+        y_rot += alpha * dy_rot;
+    }
+
+    return (lv_fpoint_t) {
+        x_rot + cx, y_rot + cy
+    };
+}
+
+void lv_vector_path_arc_to(lv_vector_path_t * path, float rx, float ry, float rotate_angle, bool large_arc,
+                           bool clockwise, const lv_fpoint_t * p)
+{
+    LV_ASSERT_NULL(path);
+    LV_ASSERT_NULL(p);
+
+    if(lv_array_is_empty(&path->ops)) {
+        /*first op must be move_to*/
+        return;
+    }
+
+    if(rx <= 0 || ry <= 0) {
+        /*no needed to draw*/
+        return;
+    }
+
+    /*https://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes*/
+
+    lv_fpoint_t * cpt = lv_array_back(&path->points);
+
+    float x0 = cpt->x;
+    float y0 = cpt->y;
+
+    /*1. dealing with degradation*/
+    if(fabsf(x0 - p->x) < EPSILON && fabsf(y0 - p->y) < EPSILON) {
+        /*same point*/
+        return;
+    }
+
+    float rotate = MATH_RADIANS(rotate_angle);
+    float sin_r = sinf(rotate);
+    float cos_r = cosf(rotate);
+
+    /*2. transform point*/
+    float dx = (x0 - p->x) * 0.5f;
+    float dy = (y0 - p->y) * 0.5f;
+
+    float x1 = cos_r * dx + sin_r * dy;
+    float y1 = -sin_r * dx + cos_r * dy;
+
+    /*3. adjust radius*/
+    float lambda_val = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
+    if(lambda_val > 1.0f) {
+        rx *= sqrtf(lambda_val);
+        ry *= sqrtf(lambda_val);
+    }
+
+    /*4. calc center point*/
+    float rx_sq = rx * rx;
+    float ry_sq = ry * ry;
+    float x1_sq = x1 * x1;
+    float y1_sq = y1 * y1;
+
+    float num = rx_sq * ry_sq - rx_sq * y1_sq - ry_sq * x1_sq;
+    float denom = rx_sq * y1_sq + ry_sq * x1_sq;
+
+    float radicand = (denom > EPSILON) ? num / denom : 0.0f;
+    if(radicand < 0.0f) radicand = 0.0f;
+
+    float sign = (large_arc == clockwise) ? -1.0f : 1.0f;
+    float coef = sign * sqrtf(radicand);
+
+    float cx_prime = (coef * rx * y1) / ry;
+    float cy_prime = -(coef * ry * x1) / rx;
+
+    float cx = cos_r * cx_prime - sin_r * cy_prime + (x0 + p->x) * 0.5f;
+    float cy = sin_r * cx_prime + cos_r * cy_prime + (y0 + p->y) * 0.5f;
+
+    float ux = (x1 - cx_prime) / rx;
+    float uy = (y1 - cy_prime) / ry;
+
+    /*5. calculate the starting angle and ending angle*/
+    float n_sq = ux * ux + uy * uy;
+    float theta1 = 0.0f;
+    if(n_sq > EPSILON) {
+        theta1 = atan2f(uy, ux);
+    }
+
+    float vx = (-x1 - cx_prime) / rx;
+    float vy = (-y1 - cy_prime) / ry;
+
+    float n = sqrtf(n_sq * (vx * vx + vy * vy));
+    float delta = 0.0f;
+    if(n > EPSILON) {
+        float cos_delta = (ux * vx + uy * vy) / n;
+        if(cos_delta > 1.0f) cos_delta = 1.0f;
+        else if(cos_delta < -1.0f) cos_delta = -1.0f;
+
+        delta = acosf(cos_delta);
+        if(ux * vy - uy * vx < 0.0f) delta = -delta;
+    }
+
+    if(!clockwise && delta > 0.0f) {
+        delta -= 2.0f * MATH_PI;
+    }
+    else if(clockwise && delta < 0.0f) {
+        delta += 2.0f * MATH_PI;
+    }
+
+    /*6. split arc into segments within 90 degrees*/
+    float angle_left = fabsf(delta);
+    int seg_count = (int)ceilf(angle_left / MATH_HALF_PI);
+    if(seg_count == 0) seg_count = 1;
+
+    float segment_angle = delta / (float)seg_count;
+
+    float current_angle = theta1;
+    for(int i = 0; i < seg_count; i++) {
+        float next_angle = current_angle + segment_angle;
+
+        float alpha_val;
+        if(fabsf(segment_angle) < 0.1f) {
+            alpha_val = segment_angle / 6.0f;
+        }
+        else {
+            float tan_half = tanf(segment_angle * 0.5f);
+            alpha_val = sinf(segment_angle) * (sqrtf(4.0f + 3.0f * tan_half * tan_half) - 1.0f) / 3.0f;
+        }
+
+        lv_fpoint_t p1 = _point_on_ellipse(rx, ry, cos_r, sin_r, cx, cy, current_angle, alpha_val);
+        lv_fpoint_t p2 = _point_on_ellipse(rx, ry, cos_r, sin_r, cx, cy, next_angle, -alpha_val);
+        lv_fpoint_t p3 = _point_on_ellipse(rx, ry, cos_r, sin_r, cx, cy, next_angle, 0.0f);
+
+        lv_vector_path_cubic_to(path, &p1, &p2, &p3);
+
+        current_angle = next_angle;
+    }
+}
+
 void lv_vector_path_close(lv_vector_path_t * path)
 {
     if(lv_array_is_empty(&path->ops)) {
@@ -228,10 +384,10 @@ void lv_vector_path_get_bounding(const lv_vector_path_t * path, lv_area_t * area
         if(p[i].y > y2) y2 = p[i].y;
     }
 
-    area->x1 = (int32_t)x1;
-    area->y1 = (int32_t)y1;
-    area->x2 = (int32_t)x2;
-    area->y2 = (int32_t)y2;
+    area->x1 = lroundf(x1);
+    area->y1 = lroundf(y1);
+    area->x2 = lroundf(x2);
+    area->y2 = lroundf(y2);
 }
 
 void lv_vector_path_append_rect(lv_vector_path_t * path, const lv_area_t * rect, float rx, float ry)
@@ -412,6 +568,11 @@ void lv_vector_path_append_arc(lv_vector_path_t * path, const lv_fpoint_t * c, f
             start.x + cx, start.y + cy
         });
     }
+    else {
+        lv_vector_path_move_to(path, &(lv_fpoint_t) {
+            start.x + cx, start.y + cy
+        });
+    }
 
     for(int i = 0; i < n_curves; ++i) {
         float end_angle = start_angle + ((i != n_curves - 1) ? MATH_HALF_PI * sweep_sign : fract);
@@ -541,6 +702,11 @@ void lv_vector_dsc_set_fill_rule(lv_vector_dsc_t * dsc, lv_vector_fill_t rule)
     dsc->current_dsc.fill_dsc.fill_rule = rule;
 }
 
+void lv_vector_dsc_set_fill_units(lv_vector_dsc_t * dsc, const lv_vector_fill_units_t units)
+{
+    dsc->current_dsc.fill_dsc.fill_units = units;
+}
+
 void lv_vector_dsc_set_fill_image(lv_vector_dsc_t * dsc, const lv_draw_image_dsc_t * img_dsc)
 {
     dsc->current_dsc.fill_dsc.style = LV_VECTOR_DRAW_STYLE_PATTERN;
@@ -571,7 +737,7 @@ void lv_vector_dsc_set_fill_gradient_spread(lv_vector_dsc_t * dsc, lv_vector_gra
     dsc->current_dsc.fill_dsc.gradient.spread = spread;
 }
 
-void lv_vector_dsc_set_fill_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_gradient_stop_t * stops,
+void lv_vector_dsc_set_fill_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_grad_stop_t * stops,
                                                  uint16_t count)
 {
     if(count > LV_GRADIENT_MAX_STOPS) {
@@ -579,7 +745,7 @@ void lv_vector_dsc_set_fill_gradient_color_stops(lv_vector_dsc_t * dsc, const lv
         count = LV_GRADIENT_MAX_STOPS;
     }
 
-    lv_memcpy(&(dsc->current_dsc.fill_dsc.gradient.stops), stops, sizeof(lv_gradient_stop_t) * count);
+    lv_memcpy(&(dsc->current_dsc.fill_dsc.gradient.stops), stops, sizeof(lv_grad_stop_t) * count);
     dsc->current_dsc.fill_dsc.gradient.stops_count = count;
 }
 
@@ -674,7 +840,7 @@ void lv_vector_dsc_set_stroke_gradient_spread(lv_vector_dsc_t * dsc, lv_vector_g
     dsc->current_dsc.stroke_dsc.gradient.spread = spread;
 }
 
-void lv_vector_dsc_set_stroke_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_gradient_stop_t * stops,
+void lv_vector_dsc_set_stroke_gradient_color_stops(lv_vector_dsc_t * dsc, const lv_grad_stop_t * stops,
                                                    uint16_t count)
 {
     if(count > LV_GRADIENT_MAX_STOPS) {
@@ -682,7 +848,7 @@ void lv_vector_dsc_set_stroke_gradient_color_stops(lv_vector_dsc_t * dsc, const 
         count = LV_GRADIENT_MAX_STOPS;
     }
 
-    lv_memcpy(&(dsc->current_dsc.stroke_dsc.gradient.stops), stops, sizeof(lv_gradient_stop_t) * count);
+    lv_memcpy(&(dsc->current_dsc.stroke_dsc.gradient.stops), stops, sizeof(lv_grad_stop_t) * count);
     dsc->current_dsc.stroke_dsc.gradient.stops_count = count;
 }
 
@@ -722,6 +888,11 @@ void lv_vector_clear_area(lv_vector_dsc_t * dsc, const lv_area_t * rect)
         return;
     }
 
+    lv_area_t final_rect;
+    if(!lv_area_intersect(&final_rect, &r, rect)) {
+        return;
+    }
+
     if(!dsc->tasks.task_list) {
         dsc->tasks.task_list = lv_malloc(sizeof(lv_ll_t));
         LV_ASSERT_MALLOC(dsc->tasks.task_list);
@@ -733,7 +904,7 @@ void lv_vector_clear_area(lv_vector_dsc_t * dsc, const lv_area_t * rect)
 
     new_task->dsc.fill_dsc.color = dsc->current_dsc.fill_dsc.color;
     new_task->dsc.fill_dsc.opa = dsc->current_dsc.fill_dsc.opa;
-    lv_area_copy(&(new_task->dsc.scissor_area), rect);
+    lv_area_copy(&(new_task->dsc.scissor_area), &final_rect);
 }
 
 void lv_draw_vector(lv_vector_dsc_t * dsc)
@@ -744,9 +915,7 @@ void lv_draw_vector(lv_vector_dsc_t * dsc)
 
     lv_layer_t * layer = dsc->layer;
 
-    lv_draw_task_t * t = lv_draw_add_task(layer, &(layer->_clip_area));
-    t->type = LV_DRAW_TASK_TYPE_VECTOR;
-    t->draw_dsc = lv_malloc(sizeof(lv_draw_vector_task_dsc_t));
+    lv_draw_task_t * t = lv_draw_add_task(layer, &(layer->_clip_area), LV_DRAW_TASK_TYPE_VECTOR);
     lv_memcpy(t->draw_dsc, &(dsc->tasks), sizeof(lv_draw_vector_task_dsc_t));
     lv_draw_finalize_task_creation(layer, t);
     dsc->tasks.task_list = NULL;
@@ -780,6 +949,8 @@ void lv_vector_dsc_skew(lv_vector_dsc_t * dsc, float skew_x, float skew_y)
 
 void lv_vector_for_each_destroy_tasks(lv_ll_t * task_list, vector_draw_task_cb cb, void * data)
 {
+    if(task_list == NULL) return;
+
     lv_vector_draw_task * task = lv_ll_get_head(task_list);
     lv_vector_draw_task * next_task = NULL;
 
