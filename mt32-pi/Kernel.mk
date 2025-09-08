@@ -50,7 +50,7 @@ EXTRACLEAN	+=	$(INIHHOME)/ini.d \
 
 include $(CIRCLEHOME)/Rules.mk
 
-CFLAGS		+=	-Werror -Wextra -Wno-unused-parameter
+CFLAGS		+=	-Werror -Wextra -Wno-unused-parameter -Wno-array-bounds
 
 CFLAGS		+=	-I "$(NEWLIBDIR)/include" \
 			-I $(STDDEF_INCPATH) \
