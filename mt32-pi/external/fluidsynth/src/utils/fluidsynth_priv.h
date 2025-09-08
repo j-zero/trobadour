@@ -31,7 +31,8 @@
 
 #include "config.h"
 
-#include <glib.h>
+#define TRUE 1
+#define FALSE 0
 
 #if HAVE_STDLIB_H
 #include <stdlib.h> // malloc, free
@@ -188,13 +189,14 @@ typedef void (*fluid_rvoice_function_t)(void *obj, const fluid_rvoice_param_t pa
 
 /* Memory allocation */
 #define FLUID_MALLOC(_n)             fluid_alloc(_n)
-#define FLUID_REALLOC(_p,_n)         realloc(_p,_n)
+#define FLUID_REALLOC(_p,_n)         fluid_realloc(_p,_n)
 #define FLUID_FREE(_p)               fluid_free(_p)
 #define FLUID_NEW(_t)                (_t*)FLUID_MALLOC(sizeof(_t))
 #define FLUID_ARRAY_ALIGNED(_t,_n,_a) (_t*)FLUID_MALLOC((_n)*sizeof(_t) + ((unsigned int)_a - 1u))
 #define FLUID_ARRAY(_t,_n)           FLUID_ARRAY_ALIGNED(_t,_n,1u)
 
 void* fluid_alloc(size_t len);
+void* fluid_realloc(void* ptr, size_t len);
 
 /* File access */
 #define FLUID_FOPEN(_f,_m)           fluid_fopen(_f,_m)
@@ -296,8 +298,8 @@ do { strncpy(_dst,_src,_n-1); \
 #define FLUID_ASSERT(a)
 #endif
 
-#define FLUID_LIKELY G_LIKELY
-#define FLUID_UNLIKELY G_UNLIKELY
+#define FLUID_LIKELY(cond) __builtin_expect((cond), 1)
+#define FLUID_UNLIKELY(cond) __builtin_expect((cond), 0)
 
 /* Misc */
 #if defined(__INTEL_COMPILER)

@@ -108,7 +108,6 @@ static int fluid_synth_render_blocks(fluid_synth_t *synth, int blockcount);
 static fluid_voice_t *fluid_synth_free_voice_by_kill_LOCAL(fluid_synth_t *synth);
 static void fluid_synth_kill_by_exclusive_class_LOCAL(fluid_synth_t *synth,
         fluid_voice_t *new_voice);
-static int fluid_synth_sfunload_callback(void *data, unsigned int msec);
 static fluid_tuning_t *fluid_synth_get_tuning(fluid_synth_t *synth,
         int bank, int prog);
 static int fluid_synth_replace_tuning_LOCK(fluid_synth_t *synth,
@@ -1168,16 +1167,8 @@ delete_fluid_synth(fluid_synth_t *synth)
 
     /* wait for and delete all the lazy sfont unloading timers */
 
-    for(list = synth->fonts_to_be_unloaded; list; list = fluid_list_next(list))
-    {
-        fluid_timer_t* timer = fluid_list_get(list);
-        // explicitly join to wait for the unload really to happen
-        fluid_timer_join(timer);
-        // delete_fluid_timer alone would stop the timer, even if it had not unloaded the soundfont yet
-        delete_fluid_timer(timer);
-    }
+    /* REMOVED FOR HW */
 
-    delete_fluid_list(synth->fonts_to_be_unloaded);
 
     if(synth->channel != NULL)
     {
@@ -5523,31 +5514,13 @@ fluid_synth_sfont_unref(fluid_synth_t *synth, fluid_sfont_t *sfont)
         {
             FLUID_LOG(FLUID_DBG, "Unloaded SoundFont");
         } /* spin off a timer thread to unload the sfont later (SoundFont loader blocked unload) */
-        else
-        {
-            fluid_timer_t* timer = new_fluid_timer(100, fluid_synth_sfunload_callback, sfont, TRUE, FALSE, FALSE);
-            synth->fonts_to_be_unloaded = fluid_list_prepend(synth->fonts_to_be_unloaded, timer);
-        }
+		//else REMOVED FOR HW
     }
 }
 
 /* Callback to continually attempt to unload a SoundFont,
  * only if a SoundFont loader blocked the unload operation */
-static int
-fluid_synth_sfunload_callback(void *data, unsigned int msec)
-{
-    fluid_sfont_t *sfont = data;
-
-    if(fluid_sfont_delete_internal(sfont) == 0)
-    {
-        FLUID_LOG(FLUID_DBG, "Unloaded SoundFont");
-        return FALSE;
-    }
-    else
-    {
-        return TRUE;
-    }
-}
+//REMOVED FOR HW
 
 /**
  * Reload a SoundFont.  The SoundFont retains its ID and index on the SoundFont stack.
@@ -7856,56 +7829,7 @@ fluid_synth_get_gen(fluid_synth_t *synth, int chan, int param)
  * @param event MIDI event to handle
  * @return #FLUID_OK on success, #FLUID_FAILED otherwise
  */
-int
-fluid_synth_handle_midi_event(void *data, fluid_midi_event_t *event)
-{
-    fluid_synth_t *synth = (fluid_synth_t *) data;
-    int type = fluid_midi_event_get_type(event);
-    int chan = fluid_midi_event_get_channel(event);
-
-    switch(type)
-    {
-    case NOTE_ON:
-        return fluid_synth_noteon(synth, chan,
-                                  fluid_midi_event_get_key(event),
-                                  fluid_midi_event_get_velocity(event));
-
-    case NOTE_OFF:
-        return fluid_synth_noteoff(synth, chan, fluid_midi_event_get_key(event));
-
-    case CONTROL_CHANGE:
-        return fluid_synth_cc(synth, chan,
-                              fluid_midi_event_get_control(event),
-                              fluid_midi_event_get_value(event));
-
-    case PROGRAM_CHANGE:
-        return fluid_synth_program_change(synth, chan, fluid_midi_event_get_program(event));
-
-    case CHANNEL_PRESSURE:
-        return fluid_synth_channel_pressure(synth, chan, fluid_midi_event_get_program(event));
-
-    case KEY_PRESSURE:
-        return fluid_synth_key_pressure(synth, chan,
-                                        fluid_midi_event_get_key(event),
-                                        fluid_midi_event_get_value(event));
-
-    case PITCH_BEND:
-        return fluid_synth_pitch_bend(synth, chan, fluid_midi_event_get_pitch(event));
-
-    case MIDI_SYSTEM_RESET:
-        return fluid_synth_system_reset(synth);
-
-    case MIDI_SYSEX:
-        return fluid_synth_sysex(synth, event->paramptr, event->param1, NULL, NULL, NULL, FALSE);
-
-    case MIDI_TEXT:
-    case MIDI_LYRIC:
-    case MIDI_SET_TEMPO:
-        return FLUID_OK;
-    }
-
-    return FLUID_FAILED;
-}
+// REMOVED FOR HW
 
 /**
  * Create and start voices using an arbitrary preset and a MIDI note on event.

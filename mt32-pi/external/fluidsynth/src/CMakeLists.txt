@@ -167,23 +167,6 @@ set ( libfluidsynth_SOURCES
     synth/fluid_tuning.h
     synth/fluid_voice.c
     synth/fluid_voice.h
-    midi/fluid_midi.c
-    midi/fluid_midi.h
-    midi/fluid_midi_router.c
-    midi/fluid_midi_router.h
-    midi/fluid_seqbind.c
-    midi/fluid_seqbind_notes.cpp
-    midi/fluid_seq.c
-    midi/fluid_seq_queue.cpp
-    drivers/fluid_adriver.c
-    drivers/fluid_adriver.h
-    drivers/fluid_mdriver.c
-    drivers/fluid_mdriver.h
-    bindings/fluid_cmd.c
-    bindings/fluid_cmd.h
-    bindings/fluid_filerenderer.c
-    bindings/fluid_ladspa.c
-    bindings/fluid_ladspa.h
 )
 if ( CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
   set_source_files_properties(rvoice/fluid_iir_filter_impl.cpp PROPERTIES COMPILE_FLAGS "-fno-math-errno -ffast-math")
@@ -367,7 +350,7 @@ if ( TARGET OpenMP::OpenMP_C AND HAVE_OPENMP )
     target_link_libraries ( libfluidsynth-OBJ PUBLIC OpenMP::OpenMP_C )
 endif()
 
-target_link_libraries ( libfluidsynth-OBJ PUBLIC GLib2::glib-2 GLib2::gthread-2 )
+# target_link_libraries ( libfluidsynth-OBJ PUBLIC GLib2::glib-2 GLib2::gthread-2 )
 
 if ( TARGET SndFile::sndfile AND LIBSNDFILE_SUPPORT )
     target_link_libraries ( libfluidsynth-OBJ PUBLIC SndFile::sndfile )
